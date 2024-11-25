@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Machine Spawner and Command Runner</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Ansible Manager</h1>
+        
+        <nav class="flex mb-8">
+            <button onclick="showTab('spawn')" id="spawnTab" class="flex-1 py-2 px-4 bg-primary text-white font-semibold rounded-tl-md rounded-tr-md">Spawn Machines</button>
+            <button onclick="showTab('command')" id="commandTab" class="flex-1 py-2 px-4 bg-gray-300 text-gray-700 font-semibold rounded-tl-md rounded-tr-md">Run Commands</button>
+        </nav>
+
+        <div id="spawnSection" class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex items-center justify-center space-x-4">
+                <label for="numMachines" class="text-lg font-medium text-gray-700">Number of machines to spawn:</label>
+                <input type="number" id="numMachines" min="1" value="1" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+                <button onclick="spawnMachines()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
+                    Spawn Machines
+                </button>
+            </div>
+        </div>
+        <div id="machineInfo" class="space-y-4"></div>
+
+        <div id="commandSection" class="bg-white rounded-lg shadow-md p-6 mb-8 hidden">
+            <div class="flex items-center justify-center space-x-4">
+                <label for="command" class="text-lg font-medium text-gray-700">Command to run:</label>
+                <input type="text" id="command" placeholder="Enter command" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary flex-grow">
+                <button onclick="runCommand()" class="bg-secondary text-white font-semibold px-6 py-2 rounded-md hover:bg-green-600 transition duration-300 ease-in-out transform hover:scale-105">
+                    Run Command
+                </button>
+            </div>
+        </div>
+        <div id="commandResults" class="space-y-4 hidden"></div>
+    </div>
+
+    <script>
+        let machineInfoData = [];
+
+        function showTab(tabName) {
+            if (tabName === 'spawn') {
+                document.getElementById('spawnSection').classList.remove('hidden');
+                document.getElementById('machineInfo').classList.remove('hidden');
+                document.getElementById('commandSection').classList.add('hidden');
+                document.getElementById('commandResults').classList.add('hidden');
+                document.getElementById('spawnTab').classList.add('bg-primary', 'text-white');
+                document.getElementById('spawnTab').classList.remove('bg-gray-300', 'text-gray-700');
+                document.getElementById('commandTab').classList.add('bg-gray-300', 'text-gray-700');
+                document.getElementById('commandTab').classList.remove('bg-primary', 'text-white');
+            } else {
+                document.getElementById('spawnSection').classList.add('hidden');
+                document.getElementById('machineInfo').classList.add('hidden');
+                document.getElementById('commandSection').classList.remove('hidden');
+                document.getElementById('commandResults').classList.remove('hidden');
+                document.getElementById('commandTab').classList.add('bg-primary', 'text-white');
+                document.getElementById('commandTab').classList.remove('bg-gray-300', 'text-gray-700');
+                document.getElementById('spawnTab').classList.add('bg-gray-300', 'text-gray-700');
+                document.getElementById('spawnTab').classList.remove('bg-primary', 'text-white');
+            }
+        }
+
+        function spawnMachines() {
+            const numMachines = document.getElementById('numMachines').value;
+            const machineInfo = document.getElementById('machineInfo');
+            machineInfo.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Spawning machines...</div>';
+
+            axios.post('/spawn', `num_machines=${numMachines}`, {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            })
+            .then(function (response) {
+                machineInfo.innerHTML = '';
+                if (response.data.error) {
+                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
+                    return;
+                }
+                machineInfoData = response.data;
+                displayMachineInfo(machineInfoData);
+            })
+            .catch(function (error) {
+                console.error('Error:', error);
+                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error spawning machines: ${error.response?.data?.error || error.message}</div>`;
+            });
+        }
+
+        function displayMachineInfo(machineInfoData) {
+            const machineInfo = document.getElementById('machineInfo');
+            machineInfo.innerHTML = '';
+            machineInfoData.forEach((machine, index) => {
+                const machineDiv = document.createElement('div');
+                machineDiv.className = 'bg-white rounded-lg shadow-md p-6 transition duration-300 ease-in-out transform hover:scale-105 mb-4';
+                machineDiv.innerHTML = `
+                    <h3 class="text-2xl font-semibold mb-4 text-gray-800">Machine ${index + 1}</h3>
+                    <div class="space-y-2">
+                        <p class="text-gray-600"><span class="font-medium text-gray-700">Container ID:</span> ${machine.container_id}</p>
+                        <p class="text-gray-600"><span class="font-medium text-gray-700">Host Port:</span> ${machine.host_port}</p>
+                        <p class="text-gray-600"><span class="font-medium text-gray-700">SSH Command:</span> <code class="bg-gray-100 px-2 py-1 rounded">${machine.host_command}</code></p>
+                        <p class="text-gray-600"><span class="font-medium text-gray-700">SSH Status:</span> <span class="${machine.ssh_status === 'Ready' ? 'text-green-600' : 'text-red-600'} font-semibold">${machine.ssh_status}</span></p>
+                    </div>
+                `;
+                machineInfo.appendChild(machineDiv);
+            });
+        }
+
+        function runCommand() {
+            const command = document.getElementById('command').value;
+            const commandResults = document.getElementById('commandResults');
+            commandResults.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Running command...</div>';
+
+            axios.post('/run_command', `command=${encodeURIComponent(command)}`, {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            })
+            .then(function (response) {
+                commandResults.innerHTML = '';
+                if (response.data.error) {
+                    commandResults.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
+                    return;
+                }
+                displayCommandResults(response.data);
+            })
+            .catch(function (error) {
+                console.error('Error:', error);
+                commandResults.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error running command: ${error.response?.data?.error || error.message}</div>`;
+            });
+        }
+
+        function displayCommandResults(machineInfoData) {
+            const commandResults = document.getElementById('commandResults');
+            commandResults.innerHTML = '';
+            machineInfoData.forEach((machine, index) => {
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'bg-white rounded-lg shadow-md p-6 transition duration-300 ease-in-out transform hover:scale-105 mb-4';
+                resultDiv.innerHTML = `
+                    <h3 class="text-2xl font-semibold mb-4 text-gray-800">Machine ${index + 1} (${machine.container_id})</h3>
+                    <div class="space-y-2">
+                        <p class="text-gray-600"><span class="font-medium text-gray-700">Command Result:</span></p>
+                        <pre class="bg-gray-100 p-2 rounded overflow-x-auto">${machine.command_result || 'N/A'}</pre>
+                    </div>
+                `;
+                commandResults.appendChild(resultDiv);
+            });
+        }
+    </script>
+</body>
+</html>
+

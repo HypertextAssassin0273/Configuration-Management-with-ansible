@@ -1,0 +1,1 @@
+pip3 install flask docker ansible_runner paramiko
