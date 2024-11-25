@@ -323,6 +323,49 @@ def cleanup_containers():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/stop_all', methods=['POST'])
+def stop_all_containers():
+    """
+    Stops and removes all spawned containers.
+    """
+    try:
+        containers = client.containers.list(all=True, filters={"label": "flask_app=spawned_container"})
+        remove_containers(containers)
+
+        session.pop('machine_info', None)  # clear session data
+        return jsonify({"status": "All containers stopped and removed successfully."})
+
+    except Exception as e:
+        app.logger.error(f"Error stopping all containers: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route('/stop_machine', methods=['POST'])
+def stop_machine():
+    """
+    Stops and removes a specific container.
+    """
+    try:
+        container_id = request.form.get('container_id')
+        if not container_id:
+            return jsonify({"error": "No container ID provided."}), 400
+
+        container = client.containers.get(container_id)
+        remove_containers([container])
+
+        # Remove the stopped container from the session data
+        session['machine_info'] = [machine for machine in session.get('machine_info', []) if machine['container_id'] != container_id]
+
+        return jsonify({"status": f"Container {container_id[:12]} stopped and removed successfully."})
+
+    except docker.errors.NotFound:
+        return jsonify({"error": f"Container {container_id[:12]} not found."}), 404
+    except Exception as e:
+        app.logger.error(f"Error stopping container {container_id[:12]}: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
 ## MAIN APP ENTRY POINT ##
 if __name__ == '__main__':
     app.run(debug=True)
