@@ -13,6 +13,7 @@
                     colors: {
                         primary: '#3B82F6',
                         secondary: '#10B981',
+                        danger: '#EF4444',
                     }
                 }
             }
@@ -34,6 +35,9 @@
                 <input type="number" id="numMachines" min="1" value="1" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
                 <button onclick="spawnMachines()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
                     Spawn Machines
+                </button>
+                <button onclick="stopAllMachines()" class="bg-danger text-white font-semibold px-6 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
+                    Stop All Machines
                 </button>
             </div>
         </div>
@@ -115,6 +119,11 @@
                         <p class="text-gray-600"><span class="font-medium text-gray-700">SSH Command:</span> <code class="bg-gray-100 px-2 py-1 rounded">${machine.host_command}</code></p>
                         <p class="text-gray-600"><span class="font-medium text-gray-700">SSH Status:</span> <span class="${machine.ssh_status === 'Ready' ? 'text-green-600' : 'text-red-600'} font-semibold">${machine.ssh_status}</span></p>
                     </div>
+                    <div class="mt-4">
+                        <button onclick="stopMachine('${machine.container_id}')" class="bg-danger text-white font-semibold px-4 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Stop Machine
+                        </button>
+                    </div>
                 `;
                 machineInfo.appendChild(machineDiv);
             });
@@ -158,6 +167,49 @@
                     </div>
                 `;
                 commandResults.appendChild(resultDiv);
+            });
+        }
+
+        function stopAllMachines() {
+            const machineInfo = document.getElementById('machineInfo');
+            machineInfo.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Stopping all machines...</div>';
+
+            axios.post('/remove_all_containers') // [IMPROVEMENT] change to stop_all_machines for later
+            .then(function (response) {
+                if (response.data.error) {
+                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
+                    return;
+                }
+                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-green-600">${response.data.status}</div>`;
+                machineInfoData = [];
+            })
+            .catch(function (error) {
+                console.error('Error:', error);
+                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error stopping machines: ${error.response?.data?.error || error.message}</div>`;
+            });
+        }
+
+        function stopMachine(containerId) {
+            const machineInfo = document.getElementById('machineInfo');
+            machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-gray-600">Stopping machine ${containerId}...</div>`;
+
+            axios.post('/remove_container', `container_id=${containerId}`, { // [IMPROVEMENT] change to stop_container for later
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            })
+            .then(function (response) {
+                if (response.data.error) {
+                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
+                    return;
+                }
+                machineInfoData = machineInfoData.filter(machine => machine.container_id !== containerId);
+                displayMachineInfo(machineInfoData);
+                machineInfo.insertAdjacentHTML('afterbegin', `<div class="text-center text-xl font-semibold text-green-600 mb-4">${response.data.status}</div>`);
+            })
+            .catch(function (error) {
+                console.error('Error:', error);
+                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error stopping machine: ${error.response?.data?.error || error.message}</div>`;
             });
         }
     </script>

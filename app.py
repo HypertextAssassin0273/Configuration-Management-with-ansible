@@ -21,7 +21,7 @@ public_key_path = ssh_key_path + ".pub"
 def cleanup_on_exit():
     """calls the cleanup route at app shutdown to remove any spawned containers."""
     with app.test_client() as flask_client:
-        response = flask_client.post('/cleanup')  # call the /cleanup route
+        response = flask_client.post('/remove_all_containers') # calls remove_all_containers route
         app.logger.info(f"Cleanup result: {response.get_data(as_text=True)}")
 
 atexit.register(cleanup_on_exit) # register 'cleanup' to run when the app quits or receives SIGINT
@@ -207,28 +207,31 @@ def run_ansible(hosts, command):
     finally:
         cleanup_files([inventory_file_path, playbook_file_path])
 
-def remove_containers(containers, type="spawned"):
+def remove_or_stop_containers(containers, action):
     """
-    Stops and removes specified containers.
+    Stops or removes the specified containers based on the action parameter.
     """
     for container in containers:
         try:
-            # if container.status != 'exited' and container.status != 'created':
-            container.stop() # [NOTE] default timeout is culprit for unssuccessful removal in 1st attempt
-            container.remove()
-            app.logger.info(f"{type} container {container.id[:12]} removed.")
+            if container.status == 'running':
+                container.stop() # [NOTE] default timeout is culprit for unssuccessful removal in 1st attempt
+            if action == 'remove':
+                container.remove()
+            app.logger.info(f"spawned container {container.id[:12]} {'removed' if action == 'remove' else 'stopped'}")
 
         except Exception as e:
-            app.logger.warning(f"Failed to remove {type} container {container.id[:12]}: {str(e)}")
+            app.logger.warning(f"Failed to {action} spawned container {container.id[:12]}: {str(e)}")
 
 
 ## ROUTES FOR FLASK APP ##
+# HTTP status codes: 200 - OK (default), 400 - Bad Request, 404 - Not Found, 500 - Internal Server Error
+
 @app.route('/')
-def index():
+def MAIN_INDEX_ROUTE():
     return render_template('index.html')
 
 @app.route('/spawn', methods=['POST'])
-def spawn_machines():
+def SPAWN_MACHINES_ROUTE():
     try:
         num_machines = request.form.get('num_machines', type=int)
         if not isinstance(num_machines, int) or num_machines <= 0:
@@ -238,7 +241,7 @@ def spawn_machines():
         containers = []  # Track spawned containers
         machine_info = []  # Track machine details for display
 
-        for i in range(num_machines):
+        for _ in range(num_machines):
             try:
                 container = spawn_container(public_key)                
                 host_port = wait_for_container(container)
@@ -268,7 +271,7 @@ def spawn_machines():
 
 
 @app.route('/run_command', methods=['POST'])
-def run_command():
+def RUN_COMMAND_ROUTE():
     try:
         command = request.form['command']
         if not command or ';' in command or '&&' in command: # prevent command injection
@@ -305,21 +308,45 @@ def run_command():
         app.logger.error(f"Error running command: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/cleanup', methods=['POST'])
-def cleanup_containers():
-    """
-    Cleans up all spawned containers and their associated data.
-    """
+@app.route('/<action>_all_containers', methods=['POST'])
+def STOP_OR_REMOVE_ALL_CONTAINERS_ROUTE(action):
     try:
-        # get all spawned containers ([NOTE] including orphaned?)
+        if not session.get('machine_info'): # safeguard against empty session data
+            return jsonify({"status": "No machines spawned. Nothing to stop or remove."})
+
+        if action not in ['stop', 'remove']: # validate the action parameter
+            return jsonify({"error": f"Invalid action: {action}. Use 'stop' or 'remove'."}), 400
+
         containers = client.containers.list(all=True, filters={"label": "flask_app=spawned_container"})
-        remove_containers(containers)
+        remove_or_stop_containers(containers, action)
 
         session.pop('machine_info', None)  # clear session data
-        return jsonify({"status": "Cleanup completed successfully."})
+        return jsonify({"status": f"All containers {'stopped and' if action == 'stop' else ''} removed successfully."})
 
     except Exception as e:
-        app.logger.error(f"Error during cleanup: {str(e)}")
+        app.logger.error(f"Error {'stopping' if action == 'stop' else 'removing' } all containers: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/<action>_container', methods=['POST'])
+def STOP_OR_REMOVE_CONTAINER_ROUTE():
+    try:
+        container_id = request.form.get('container_id')
+        if not container_id:
+            return jsonify({"error": "No container ID provided."}), 400
+
+        container = client.containers.get(container_id)
+        remove_or_stop_containers([container], 'stop')
+
+        # Remove the stopped container from the session data
+        session['machine_info'] = [machine for machine in session.get('machine_info', []) if machine['container_id'] != container_id]
+
+        return jsonify({"status": f"Container {container_id[:12]} stopped and removed successfully."})
+
+    except docker.errors.NotFound:
+        return jsonify({"error": f"Container {container_id[:12]} not found."}), 404
+    except Exception as e:
+        app.logger.error(f"Error stopping container {container_id[:12]}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
