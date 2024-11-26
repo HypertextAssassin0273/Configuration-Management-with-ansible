@@ -174,7 +174,7 @@
             const machineInfo = document.getElementById('machineInfo');
             machineInfo.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Stopping all machines...</div>';
 
-            axios.post('/stop_all')
+            axios.post('/remove_all_containers') // [IMPROVEMENT] change to stop_all_machines for later
             .then(function (response) {
                 if (response.data.error) {
                     machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
@@ -193,7 +193,7 @@
             const machineInfo = document.getElementById('machineInfo');
             machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-gray-600">Stopping machine ${containerId}...</div>`;
 
-            axios.post('/stop_machine', `container_id=${containerId}`, {
+            axios.post('/remove_container', `container_id=${containerId}`, { // [IMPROVEMENT] change to stop_container for later
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 }
