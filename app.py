@@ -26,8 +26,7 @@ ssh_key_dir = os.path.expanduser("~/.ssh")
 ssh_key_path = os.path.join(ssh_key_dir, "docker_container_key")
 public_key_path = ssh_key_path + ".pub"
 
-next_available_port = 22001 # starting port for container SSH mapping
-MAX_CONAINER_LIMIT = 100 # maximum number of containers that can be spawned
+MAX_CONTAINER_LIMIT = 100 # maximum number of containers that can be spawned
 
 
 ## HELPER FUNCTIONS ##
@@ -52,8 +51,7 @@ def ensure_ssh_key():
 
 
 def spawn_container(public_key):
-    global next_available_port
-    try:        
+    try:
         container = client.containers.run(
             'debian:bullseye-slim',
             command = f'/bin/bash -c "\
@@ -69,13 +67,12 @@ def spawn_container(public_key):
                         sed -i \'s@#PasswordAuthentication yes@PasswordAuthentication no@\' /etc/ssh/sshd_config && \
                         exec /usr/sbin/sshd -D"',
             detach = True,
-            ports = {'22/tcp': next_available_port},  # assign available port for SSH
+            ports = {'22/tcp': None}, # assign random host port
             tty = True,
-            labels = {"flask_app": "spawned_container"} # custom label for faster lookup (docker inspect)
+            labels = {"flask_app": "spawned_container"} # custom label for faster lookup
         )
 
-        app.logger.info(f"Container {container.id} spawned successfully on port {next_available_port}")
-        next_available_port += 1 # increment port for next container
+        app.logger.info(f"Container {container.id[:12]} spawned successfully.")
         return container
 
     except Exception as e:
@@ -183,24 +180,28 @@ def remove_or_stop_containers(containers, action, type='spawned'):
     """
     for container in containers:
         try:
-            if container.status == 'running':
-                container.stop() # [NOTE] default timeout is culprit for unssuccessful removal in 1st attempt
+            container.stop()
             if action == 'remove':
                 container.remove()
-            app.logger.info(f"spawned container {container.id[:12]} {'removed' if action == 'remove' else 'stopped'}")
+            app.logger.info(f"{type} container {container.id[:12]} {'removed' if action == 'remove' else 'stopped'}")
 
         except Exception as e:
             app.logger.warning(f"Failed to {action} {type} container {container.id[:12]}: {str(e)}")
 
 
-def cleanup(action='remove'):
-    """Cleans up all spawned containers and orphaned containers (by stopping or removing them)."""
-    containers = client.containers.list(all=True, filters={"label": "flask_app=spawned_container"})
-    remove_or_stop_containers(containers, action)
+def cleanup(action='stop'):
+    """Cleans up all spawned containers and orphaned containers (by stopping or removing them)."""    
+    if action == 'remove':
+        containers = client.containers.list(all=True, filters={"label": "flask_app=spawned_container"})
+        remove_or_stop_containers(containers, 'remove')
 
-    # [OPTIONAL] remove all orphaned containers (if any, due to previous errors)
-    containers = client.containers.list(all=True, filters={"ancestor": "debian:bullseye-slim"})
-    remove_or_stop_containers(containers, action, 'orphaned')
+        # remove all orphaned containers (if any, due to previous errors)
+        containers = client.containers.list(all=True, filters={"ancestor": "debian:bullseye-slim"})
+        remove_or_stop_containers(containers, 'remove', 'orphaned')
+
+    else:
+        containers = client.containers.list(all=True, filters={"label": "flask_app=spawned_container", "status": "running"})
+        remove_or_stop_containers(containers, 'stop')
 
     app.logger.info("Cleanup complete.")
 
@@ -226,37 +227,23 @@ def GET_MACHINE_INFO_ROUTE():
 def SPAWN_MACHINES_ROUTE():
     try:
         num_machines = request.form.get('num_machines', type=int)
+        machine_info = session.get('machine_info', []) # track spawned containers
+        spawned_machine_count = len(client.containers.list(filters={"label": "flask_app=spawned_container"}))
 
-        if not isinstance(num_machines, int) or num_machines <= 0: # [OPTIONAL] validation for preventing injection attacks
-            return jsonify({"error": "Invalid 'num_machines' value. Must be a positive integer."}), 400
-        
-        if num_machines > MAX_CONAINER_LIMIT:
-            return jsonify({"error": f"Cannot spawn more than {MAX_CONAINER_LIMIT} machines."}), 400
-        
+        if num_machines > MAX_CONTAINER_LIMIT - spawned_machine_count:
+            return jsonify({"error": f"Cannot spawn more than {MAX_CONTAINER_LIMIT} machines."}), 400
+
         public_key = ensure_ssh_key()
-        containers = []  # Track spawned containers
-        machine_info = session.get('machine_info', []) # Track machine details for display
 
         for _ in range(num_machines):
-            try:
-                container = spawn_container(public_key)                
-                host_port = get_port_mapping(container)
-                containers.append(container)
-                machine_info.append({
-                    'container_id': container.id[:12],
-                    'host_port': host_port,
-                    'host_command': f"ssh -o StrictHostKeyChecking=no -i {ssh_key_path} root@localhost -p {host_port}",
-                    'ssh_status': 'Ready'
-                })
-
-            except Exception as e: # [NOTE] machine_info needs to be handled properly
-                app.logger.error(str(e))
-                machine_info.append({
-                    'container_id': container.id[:12] if container else "Unknown",
-                    'host_port': None,
-                    'host_command': None,
-                    'ssh_status': 'Not Ready'
-                })
+            container = spawn_container(public_key)                
+            host_port = get_port_mapping(container)
+            machine_info.append({
+                'container_id': container.id[:12],
+                'host_port': host_port,
+                'host_command': f"ssh -o StrictHostKeyChecking=no -i {ssh_key_path} root@localhost -p {host_port}",
+                'ssh_status': 'Ready'
+            })
 
         session['machine_info'] = machine_info
         return jsonify(machine_info)
@@ -270,7 +257,7 @@ def SPAWN_MACHINES_ROUTE():
 def RUN_COMMAND_ROUTE():
     try:
         command = request.form['command']
-        if not command: # [OPTIONAL] validation: `or ';' in command or '&&' in command or '|' in command:`, [IMPROVEMENT] use regex patterns
+        if not command: # [IMPROVEMENT] ensure that command text-box can accept multi-line commands & also accepts: ". / | & {} () etc" 
             return jsonify({"error": "Invalid command."}), 400
 
         machine_info = session.get('machine_info', [])
@@ -285,11 +272,11 @@ def RUN_COMMAND_ROUTE():
                 "ansible_ssh_private_key_file": ssh_key_path,
                 "ansible_ssh_extra_args": "-o StrictHostKeyChecking=no"
             }
-            for machine in machine_info if machine['ssh_status'] == 'Ready' # [NOTE] currently, only ready machines are considered, ssh_status is not reliable
+            for machine in machine_info # if machine['ssh_status'] == 'Ready' # [NOTE] ssh_status not reliable as currently only ready machines are considered 
         }
 
-        if not ansible_hosts:
-            return jsonify({"error": "No ready containers available for command execution."}), 400
+        # if not ansible_hosts: # [OPTIONAL] depends on ssh_status check
+        #     return jsonify({"error": "No ready containers available for command execution."}), 400
 
         app.logger.info("Running Ansible command on hosts.")
         command_results = run_ansible(ansible_hosts, command)
@@ -309,13 +296,13 @@ def RUN_COMMAND_ROUTE():
 def STOP_OR_REMOVE_ALL_CONTAINERS_ROUTE(action):
     try:
         if not session.get('machine_info'): # safeguard against empty session data
-            return jsonify({"error": "No machines spawned. Nothing to stop or remove."}), 400
+            return jsonify({"error": f"No machines spawned. Nothing to {action}."}), 400
 
         if action not in ['stop', 'remove']: # [OPTIONAL] validate the action parameter
             return jsonify({"error": f"Invalid action: {action}. Use 'stop' or 'remove'."}), 400
 
         cleanup(action)
-        session['machine_info'] = []  # clear session data for spawned containers
+        session['machine_info'] = []  # clear session data (for spawned containers)
         return jsonify({"status": f"All containers stopped {'and removed' if action == 'remove' else ''} successfully."})
 
     except Exception as e:
@@ -329,6 +316,9 @@ def STOP_OR_REMOVE_CONTAINER_ROUTE(action):
         container_id = request.form.get('container_id')
         if not container_id:
             return jsonify({"error": "No container ID provided."}), 400
+        
+        if action not in ['stop', 'remove']: # [OPTIONAL] check for valid action
+            return jsonify({"error": f"Invalid action: {action}. Use 'stop' or 'remove'."}), 400
 
         container = client.containers.get(container_id)
         remove_or_stop_containers([container], action)
@@ -338,11 +328,45 @@ def STOP_OR_REMOVE_CONTAINER_ROUTE(action):
 
         return jsonify({"status": f"Container {container_id[:12]} stopped {'and removed' if action == 'remove' else ''} successfully."})
 
-    except docker.errors.NotFound:
+    except docker.errors.NotFound: # invalid container id case
         return jsonify({"error": f"Container {container_id[:12]} not found."}), 404
 
     except Exception as e:
         app.logger.error(f"Error {'stopping' if action == 'stop' else 'removing' } container {container_id[:12]}: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/fetch_stopped_containers', methods=['POST'])
+def FETCH_STOPPED_CONTAINERS_ROUTE():
+    try:
+        containers = set(client.containers.list(all=True, filters={"label": "flask_app=spawned_container", "status": "exited"}))
+        if not containers:
+            return jsonify({"error": "No stopped containers found."}), 400
+        
+        machine_info = session.get('machine_info', [])
+        if machine_info: # fetch only those containers that are not present in session data, [NOTE] O(N^2) operation reduced to O(N)
+            containers -= set(client.containers.get(machine['container_id']) for machine in machine_info)
+
+        for container in containers:
+            try:
+                container.start() # restart container
+                host_port = get_port_mapping(container)
+                machine_info.append({
+                    'container_id': container.id[:12],
+                    'host_port': host_port,
+                    'host_command': f"ssh -o StrictHostKeyChecking=no -i {ssh_key_path} root@localhost -p {host_port}",
+                    'ssh_status': 'Ready'
+                })
+                app.logger.info(f"Container {container.id[:12]} restarted successfully on port {host_port}")
+            
+            except Exception as e:
+                app.logger.error(f"Error restarting container {container.id[:12]}: {str(e)}")
+
+        session['machine_info'] = machine_info
+        return jsonify(machine_info)
+    
+    except Exception as e:
+        app.logger.error(f"Error fetching stopped containers: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 

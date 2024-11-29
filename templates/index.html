@@ -50,11 +50,18 @@
                     <label for="numMachines" class="text-lg font-medium text-gray-700">Number of machines to spawn:</label>
                     <input type="number" id="numMachines" min="1" value="1" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
                     <button onclick="spawnMachines()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
-                        Spawn Machines
+                        Spawn New
                     </button>
-                    <button onclick="stopAllMachines()" class="bg-danger text-white font-semibold px-6 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
-                        Stop All Machines
+                    <button onclick="fetchStoppedMachines()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
+                        Fetch Old
                     </button>
+                    <button onclick="forAllMachines()" class="bg-danger text-white font-semibold px-6 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
+                        Stop All
+                    </button>
+                    <button onclick="forAllMachines('remove')" class="bg-danger text-white font-semibold px-6 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
+                        Remove All
+                    </button>
+                    <!-- bg (color) options: bg-secondary, bg-danger, bg-green-600 ?? -->
                 </div>
                 <div id="machineInfo" class="mt-8 space-y-4"></div>
             </div>
@@ -76,7 +83,6 @@
     <script>
         let machineInfoData = [];
 
-        // Tab switching logic
         const spawnTab = document.getElementById('spawnTab');
         const commandTab = document.getElementById('commandTab');
         const spawnPanel = document.getElementById('spawnPanel');
@@ -122,6 +128,26 @@
             });
         }
 
+        function fetchStoppedMachines() {
+            const machineInfo = document.getElementById('machineInfo');
+            machineInfo.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Fetching stopped machines...</div>';
+
+            axios.post('/fetch_stopped_containers')
+            .then(function (response) {
+                machineInfo.innerHTML = '';
+                if (response.data.error) {
+                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
+                    return;
+                }
+                machineInfoData = response.data;
+                displayMachineInfo(machineInfoData);
+            })
+            .catch(function (error) {
+                console.error('Error:', error);
+                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error fetching stopped machines: ${error.response?.data?.error || error.message}</div>`;
+            });
+        }
+
         function displayMachineInfo(machineInfoData) {
             const machineInfo = document.getElementById('machineInfo');
             machineInfo.innerHTML = '';
@@ -137,8 +163,11 @@
                         <p class="text-gray-600"><span class="font-medium text-gray-700">SSH Status:</span> <span class="${machine.ssh_status === 'Ready' ? 'text-green-600' : 'text-red-600'} font-semibold">${machine.ssh_status}</span></p>
                     </div>
                     <div class="mt-4">
-                        <button onclick="stopMachine('${machine.container_id}')" class="bg-danger text-white font-semibold px-4 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
-                            Stop Machine
+                        <button onclick="forSingleMachine('${machine.container_id}')" class="bg-danger text-white font-semibold px-4 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Stop
+                        </button>
+                        <button onclick="forSingleMachine('${machine.container_id}', 'remove')" class="bg-danger text-white font-semibold px-4 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Remove
                         </button>
                     </div>
                 `;
@@ -146,11 +175,11 @@
             });
         }
 
-        function stopAllMachines() {
+        function forAllMachines(action = 'stop') {
             const machineInfo = document.getElementById('machineInfo');
-            machineInfo.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Stopping all machines...</div>';
+            machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-gray-600">${action === 'stop' ? 'Stopping' : 'Removing'} all machines...</div>`;
 
-            axios.post('/remove_all_containers') // [IMPROVEMENT] change to stop_all_machines for later
+            axios.post(`/${action}_all_containers`)
             .then(function (response) {
                 if (response.data.error) {
                     machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
@@ -165,11 +194,11 @@
             });
         }
 
-        function stopMachine(containerId) {
+        function forSingleMachine(containerId, action = 'stop') {
             const machineInfo = document.getElementById('machineInfo');
-            machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-gray-600">Stopping machine ${containerId}...</div>`;
+            machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-gray-600">${action === 'stop' ? 'Stopping' : 'Removing'} machine ${containerId}...</div>`;
 
-            axios.post('/remove_container', `container_id=${containerId}`, { // [IMPROVEMENT] change to stop_container for later
+            axios.post(`/${action}_container`, `container_id=${containerId}`, {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 }
