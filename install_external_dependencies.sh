@@ -1,1 +1,1 @@
-pip3 install flask docker ansible_runner paramiko
+pip3 install flask flask_session docker ansible_runner 

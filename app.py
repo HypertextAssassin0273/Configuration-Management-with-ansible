@@ -1,20 +1,33 @@
 ## DEPENDENCIES ##
 from flask import Flask, render_template, request, jsonify, session # external
-import docker, ansible_runner, paramiko # external
-import os, atexit, signal, time,json, logging, tempfile # built-in
+from flask_session import Session # external
+
+import docker, ansible_runner # external
+import os, shutil, atexit, signal, json, logging, tempfile # built-in
 
 
 ## GLOBAL CONFIGURATION ##
 app = Flask(__name__) # create a Flask app
-app.secret_key = os.urandom(24)  # set a secret key for session management
+app.config['SECRET_KEY'] = os.urandom(24) # set a secret key for session management
+app.config['SESSION_TYPE'] = 'filesystem' # store session data in 'filesystem'
 
-client = docker.from_env() # connect to docker daemon
+def clear_session_files(dir = 'flask_session'):
+    if os.path.exists(dir):
+        shutil.rmtree(dir) # removes the directory and its contents
+        app.logger.info("Cleared old Flask session files at startup.")
 
-logging.basicConfig(level=logging.DEBUG) # gives us access to 'app.logger'
+clear_session_files() # clear old session files at startup
+Session(app) # initialize session management
+
+client = docker.from_env() # connect to docker daemon (using default socket)
+logging.basicConfig(level=logging.DEBUG) # set logging level to DEBUG (for app.logger)
 
 ssh_key_dir = os.path.expanduser("~/.ssh")
 ssh_key_path = os.path.join(ssh_key_dir, "docker_container_key")
 public_key_path = ssh_key_path + ".pub"
+
+next_available_port = 22001 # starting port for container SSH mapping
+MAX_CONAINER_LIMIT = 100 # maximum number of containers that can be spawned
 
 
 ## HELPER FUNCTIONS ##
@@ -39,29 +52,30 @@ def ensure_ssh_key():
 
 
 def spawn_container(public_key):
-    try:
+    global next_available_port
+    try:        
         container = client.containers.run(
             'debian:bullseye-slim',
-            command=f'/bin/bash -c "\
-                    apt-get update && \
-                    apt-get install -y openssh-server python3 && \
-                    mkdir -p /run/sshd && \
-                    mkdir -p /root/.ssh && \
-                    echo \'{public_key}\' > /root/.ssh/authorized_keys && \
-                    chmod 600 /root/.ssh/authorized_keys && \
-                    chmod 700 /root/.ssh && \
-                    sed -i \'s/#PermitRootLogin prohibit-password/PermitRootLogin yes/\' /etc/ssh/sshd_config && \
-                    sed -i \'s/#PubkeyAuthentication yes/PubkeyAuthentication yes/\' /etc/ssh/sshd_config && \
-                    sed -i \'s@#PasswordAuthentication yes@PasswordAuthentication no@\' /etc/ssh/sshd_config && \
-                    /usr/sbin/sshd && \
-                    tail -f /dev/null"',
+            command = f'/bin/bash -c "\
+                        apt-get update && \
+                        apt-get install -y openssh-server python3 && \
+                        mkdir -p /run/sshd && \
+                        mkdir -p /root/.ssh && \
+                        echo \'{public_key}\' > /root/.ssh/authorized_keys && \
+                        chmod 600 /root/.ssh/authorized_keys && \
+                        chmod 700 /root/.ssh && \
+                        sed -i \'s/#PermitRootLogin prohibit-password/PermitRootLogin yes/\' /etc/ssh/sshd_config && \
+                        sed -i \'s/#PubkeyAuthentication yes/PubkeyAuthentication yes/\' /etc/ssh/sshd_config && \
+                        sed -i \'s@#PasswordAuthentication yes@PasswordAuthentication no@\' /etc/ssh/sshd_config && \
+                        exec /usr/sbin/sshd -D"',
             detach = True,
-            ports = {'22/tcp': None},  # let docker assign a random port
+            ports = {'22/tcp': next_available_port},  # assign available port for SSH
             tty = True,
             labels = {"flask_app": "spawned_container"} # custom label for faster lookup (docker inspect)
         )
 
-        app.logger.info(f"Container {container.id} spawned successfully")
+        app.logger.info(f"Container {container.id} spawned successfully on port {next_available_port}")
+        next_available_port += 1 # increment port for next container
         return container
 
     except Exception as e:
@@ -76,46 +90,6 @@ def get_port_mapping(container):
     container.reload() # refresh container status
     ports = container.attrs['NetworkSettings']['Ports']
     return None if '22/tcp' not in ports else ports['22/tcp'][0]['HostPort']
-
-
-## [NOTE] SSH readiness check is not reliable:
-# def wait_for_ssh(host, port, retries=5, delay=5):
-#     """
-#     Waits for SSH to be available on the specified host and port, with exponential backoff.
-#     """
-#     for attempt in range(retries):
-#         try:
-#             with paramiko.SSHClient() as ssh_client:
-#                 ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-#                 ssh_client.connect(hostname=host, port=port, username='root', key_filename=ssh_key_path, timeout=5)
-
-#             app.logger.info(f"SSH is ready on {host}:{port}.")
-#             return True
-
-#         except Exception as e:
-#             app.logger.debug(f"SSH attempt {attempt + 1}/{retries} failed: {e}")
-#             time.sleep(delay * (2 ** attempt))  # exponential backoff
-
-#     app.logger.error(f"SSH not ready after {retries} attempts.")
-#     return False
-
-
-# def wait_for_container(container, timeout=60, interval=5):
-#     """
-#     Waits for a container to initialize and report its SSH readiness.
-#     """
-#     elapsed = 0
-#     while elapsed < timeout:
-#         host_port = get_port_mapping(container)
-
-#         if host_port and wait_for_ssh('localhost', host_port):
-#             return host_port
-
-#         app.logger.info(f"Waiting for container {container.id[:12]} to initialize...")
-#         time.sleep(interval)
-#         elapsed += interval
-
-#     raise TimeoutError(f"Container {container.id[:12]} failed to initialize within {timeout} seconds.")
 
 
 def create_temp_file(content, suffix, writer=lambda content, file: file.write(content)):
@@ -151,7 +125,7 @@ def cleanup_files(file_paths):
     """
     for file_path in file_paths:
         if os.path.exists(file_path):
-            os.unlink(file_path)
+            os.unlink(file_path) # removes the file
 
 
 def run_ansible(hosts, command):
@@ -187,10 +161,10 @@ def run_ansible(hosts, command):
 
         app.logger.info(f"Running Ansible playbook on hosts: {hosts}")
         result = ansible_runner.run(
-            private_data_dir='/tmp',
-            playbook=playbook_file_path,
-            inventory=inventory_file_path,
-            extravars={'ansible_ssh_private_key_file': ssh_key_path}
+            private_data_dir = tempfile.gettempdir(), # set platform-independent '/tmp' directory
+            playbook = playbook_file_path,
+            inventory = inventory_file_path,
+            extravars = {'ansible_ssh_private_key_file': ssh_key_path}
         )
 
         return parse_ansible_results(result)
@@ -235,16 +209,30 @@ def cleanup(action='remove'):
 # HTTP status codes: 200 - OK (default), 400 - Bad Request, 404 - Not Found, 500 - Internal Server Error
 @app.route('/')
 def MAIN_INDEX_ROUTE():
-    return render_template('index.html')
+    return render_template('index.html', machine_info=session.get('machine_info', []))
+
+
+@app.route('/configure')
+def CONFIGURE_ROUTE():
+    return render_template('configure.html')
+
+
+@app.route('/get_machine_info')
+def GET_MACHINE_INFO_ROUTE():
+    return jsonify(session.get('machine_info', []))
 
 
 @app.route('/spawn', methods=['POST'])
 def SPAWN_MACHINES_ROUTE():
     try:
         num_machines = request.form.get('num_machines', type=int)
+
         if not isinstance(num_machines, int) or num_machines <= 0: # [OPTIONAL] validation for preventing injection attacks
             return jsonify({"error": "Invalid 'num_machines' value. Must be a positive integer."}), 400
-
+        
+        if num_machines > MAX_CONAINER_LIMIT:
+            return jsonify({"error": f"Cannot spawn more than {MAX_CONAINER_LIMIT} machines."}), 400
+        
         public_key = ensure_ssh_key()
         containers = []  # Track spawned containers
         machine_info = session.get('machine_info', []) # Track machine details for display
@@ -261,7 +249,7 @@ def SPAWN_MACHINES_ROUTE():
                     'ssh_status': 'Ready'
                 })
 
-            except TimeoutError as e:
+            except Exception as e: # [NOTE] machine_info needs to be handled properly
                 app.logger.error(str(e))
                 machine_info.append({
                     'container_id': container.id[:12] if container else "Unknown",
@@ -359,23 +347,28 @@ def STOP_OR_REMOVE_CONTAINER_ROUTE(action):
 
 
 ## EXIT POINT SETUP (FOR CLEANUP) ##
+atexit.register(cleanup) #  register 'cleanup' to run when the app quits normally
+
 def handle_sigint(signum, frame):
     """Custom signal handler to catch Ctrl+C (SIGINT) interrupts."""
     app.logger.info("Received SIGINT (Ctrl+C), cleaning up...")
-    cleanup() # run the cleanup before exiting
-    exit(0)
+    exit(0) # also calls the 'cleanup' function
 
 def handle_sigstp(signum, frame):
     """Custom signal handler to catch SIGTSTP (Ctrl+Z) interrupts."""
     app.logger.info("Received SIGTSTP (Ctrl+Z), cleaning up...")
-    cleanup()
     exit(0)
 
-atexit.register(cleanup) # [OPTIONAL] register 'cleanup' to run when the app quits normally
-signal.signal(signal.SIGINT, handle_sigint) # register SIGINT handler to run 'cleanup' when Ctrl+C is pressed
-signal.signal(signal.SIGTSTP, handle_sigstp) # register SIGTSTP handler to run 'cleanup' when Ctrl+Z is pressed
+def handle_sigterm(signum, frame):
+    """Custom signal handler to catch SIGTERM interrupts."""
+    app.logger.info("Received SIGTERM, cleaning up...")
+    exit(0)
+
+signal.signal(signal.SIGINT, handle_sigint) # register SIGINT custom handler to run when Ctrl+C is pressed
+signal.signal(signal.SIGTSTP, handle_sigstp) # register SIGTSTP custom handler to run when Ctrl+Z is pressed
+signal.signal(signal.SIGTERM, handle_sigterm) # register SIGTERM custom handler to run when the app is terminated
 
 
 ## MAIN FLASK APP ENTRY POINT ##
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, use_reloader=False) # start the Flask app in debug mode (with auto-reload disabled)

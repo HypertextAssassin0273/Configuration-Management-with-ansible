@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Management with Ansible</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+    <nav class="bg-primary text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <a href="/" class="text-2xl font-bold">CONFIGURATION MANAGEMENT WITH ANSIBLE</a>
+            <div>
+                <a href="/" class="mr-4 hover:underline">HOME</a>
+                <a href="/configure" class="hover:underline">CONFIGURE</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Configure Docker Container</h1>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Docker Settings</h2>
+            <form class="space-y-4">
+                <div>
+                    <label for="dockerImage" class="block text-sm font-medium text-gray-700">Docker Image</label>
+                    <input type="text" id="dockerImage" name="dockerImage" value="debian:bullseye-slim" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                </div>
+                <div>
+                    <label for="maxContainers" class="block text-sm font-medium text-gray-700">Max Containers</label>
+                    <input type="number" id="maxContainers" name="maxContainers" value="100" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                </div>
+                <div>
+                    <label for="sshKeyPath" class="block text-sm font-medium text-gray-700">SSH Key Path</label>
+                    <input type="text" id="sshKeyPath" name="sshKeyPath" value="~/.ssh/docker_container_key" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                </div>
+                <div>
+                    <button type="submit" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
+                        Save Configuration
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
