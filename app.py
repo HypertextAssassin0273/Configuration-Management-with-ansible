@@ -206,18 +206,18 @@ def cleanup(action='stop'):
     app.logger.info("Cleanup complete.")
 
 
-## ROUTES (FOR FLASK APP) ##
-# HTTP status codes: 200 - OK (default), 400 - Bad Request, 404 - Not Found, 500 - Internal Server Error
+## ROUTES (FOR RENDERING HTML PAGES) ##
 @app.route('/')
-def MAIN_INDEX_ROUTE():
-    return render_template('index.html', machine_info=session.get('machine_info', []))
+def INDEX_PAGE_ROUTE(): # default/home page route
+    return render_template('index.html')
 
 
 @app.route('/configure')
-def CONFIGURE_ROUTE():
+def CONFIGURE_PAGE_ROUTE():
     return render_template('configure.html')
 
 
+## ROUTES (FOR HANDLING AJAX REQUESTS) ##
 @app.route('/get_machine_info')
 def GET_MACHINE_INFO_ROUTE():
     return jsonify(session.get('machine_info', []))
@@ -370,6 +370,13 @@ def FETCH_STOPPED_CONTAINERS_ROUTE():
         return jsonify({"error": str(e)}), 500
 
 
+## [NOTE] SOME IMPORTANT POINTS (FOR ROUTES): ##
+# 1) axios is used for making AJAX requests (in the frontend)
+# 2) all API routes return JSON responses (for AJAX requests)
+# 3) HTTP status codes are used to indicate success/failure of requests:
+#    e.g. 200 (OK -> default), 400 (Bad Request), 404 (Not Found), 500 (Internal Server Error)
+
+
 ## EXIT POINT SETUP (FOR CLEANUP) ##
 atexit.register(cleanup) #  register 'cleanup' to run when the app quits normally
 
@@ -393,6 +400,6 @@ signal.signal(signal.SIGTSTP, handle_sigstp) # register SIGTSTP custom handler t
 signal.signal(signal.SIGTERM, handle_sigterm) # register SIGTERM custom handler to run when the app is terminated
 
 
-## MAIN FLASK APP ENTRY POINT ##
+## MAIN ENTRY POINT ##
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False) # start the Flask app in debug mode (with auto-reload disabled)

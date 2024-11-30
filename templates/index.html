@@ -83,6 +83,22 @@
     <script>
         let machineInfoData = [];
 
+        /* Fetch Machine Info on Page Load */
+        window.onload = function() {
+            axios.get('/get_machine_info')
+            .then(function (response) {
+                machineInfoData = response.data;
+                displayMachineInfo(machineInfoData);
+            })
+            .catch(function (error) {
+                console.error('Error fetching machine info:', error);
+                const machineInfo = document.getElementById('machineInfo');
+                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error fetching machine info: ${error.response?.data?.error || error.message}</div>`;
+            });
+        };
+
+
+        /* Handling Tab Switching */
         const spawnTab = document.getElementById('spawnTab');
         const commandTab = document.getElementById('commandTab');
         const spawnPanel = document.getElementById('spawnPanel');
@@ -103,6 +119,8 @@
         spawnTab.addEventListener('click', () => switchTab(spawnTab, spawnPanel));
         commandTab.addEventListener('click', () => switchTab(commandTab, commandPanel));
 
+
+        /* Handling Machine Management */
         function spawnMachines() {
             const numMachines = document.getElementById('numMachines').value;
             const machineInfo = document.getElementById('machineInfo');
@@ -218,6 +236,8 @@
             });
         }
 
+
+        /* Handling Command Execution */
         function runCommand() {
             const command = document.getElementById('command').value;
             const commandResults = document.getElementById('commandResults');
@@ -258,20 +278,6 @@
                 commandResults.appendChild(resultDiv);
             });
         }
-
-        // Fetch machine info on page load
-        window.onload = function() {
-            axios.get('/get_machine_info')
-            .then(function (response) {
-                machineInfoData = response.data;
-                displayMachineInfo(machineInfoData);
-            })
-            .catch(function (error) {
-                console.error('Error fetching machine info:', error);
-                const machineInfo = document.getElementById('machineInfo');
-                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error fetching machine info: ${error.response?.data?.error || error.message}</div>`;
-            });
-        };
     </script>
 </body>
 </html>
