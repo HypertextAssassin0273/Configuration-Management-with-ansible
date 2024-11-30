@@ -1,2 +1,7 @@
+env/*
 myenv/*
 flask_session/*
+artifacts/*
+dummy.config.yml
+ftp_config.yml
+nginx_config.yml
