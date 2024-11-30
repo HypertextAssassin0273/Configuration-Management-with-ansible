@@ -1,0 +1,180 @@
+---
+# DevSecOps Pipeline Playbook
+# This playbook implements security scanning, testing, and deployment with security best practices
+
+- name: DevSecOps Pipeline
+  hosts: all
+  become: yes
+  vars:
+    app_name: myapp
+    git_repo: "https://github.com/myorg/{{ app_name }}"
+    docker_image: "{{ app_name }}:{{ build_version }}"
+    scan_results_dir: /var/log/security_scans
+    
+  tasks:
+    # Pre-deployment Security Checks
+    - name: Create security scan directory
+      file:
+        path: "{{ scan_results_dir }}"
+        state: directory
+        mode: '0750'
+
+    - name: Install security scanning tools
+      package:
+        name:
+          - git
+          - sonar-scanner
+          - bandit
+          - trivy
+          - owasp-dependency-check
+        state: present
+
+    # Source Code Security Analysis
+    - name: Run SonarQube Analysis
+      command: >
+        sonar-scanner
+        -Dsonar.projectKey={{ app_name }}
+        -Dsonar.sources=.
+        -Dsonar.host.url={{ sonarqube_url }}
+      register: sonar_result
+
+    - name: Python Security Scan with Bandit
+      command: bandit -r . -f json -o "{{ scan_results_dir }}/bandit-results.json"
+      when: project_language == "python"
+
+    # Dependency Security Checks
+    - name: Run OWASP Dependency Check
+      command: >
+        dependency-check
+        --project {{ app_name }}
+        --scan .
+        --format JSON
+        --out "{{ scan_results_dir }}/dependency-check-report.json"
+
+    # Container Security Scanning
+    - name: Scan Docker image with Trivy
+      command: >
+        trivy image --format json 
+        --output "{{ scan_results_dir }}/trivy-results.json"
+        {{ docker_image }}
+
+    # Secret Scanning
+    - name: Run GitLeaks for secret scanning
+      command: >
+        gitleaks detect
+        --source . 
+        --report-format json
+        --report-path "{{ scan_results_dir }}/gitleaks-report.json"
+
+    # Infrastructure as Code Security Scanning
+    - name: Run TFSec on Terraform files
+      command: >
+        tfsec . 
+        --format json 
+        --out "{{ scan_results_dir }}/tfsec-results.json"
+      when: infrastructure_as_code == "terraform"
+
+    # Security Compliance Checks
+    - name: Run InSpec compliance checks
+      command: >
+        inspec exec compliance-profile 
+        --reporter json:{{ scan_results_dir }}/inspec-results.json
+
+    # Evaluate Security Results
+    - name: Check security scan results
+      shell: |
+        python3 << EOF
+        import json
+        import sys
+        
+        def check_scan_results():
+            with open('{{ scan_results_dir }}/trivy-results.json') as f:
+                trivy_results = json.load(f)
+            with open('{{ scan_results_dir }}/dependency-check-report.json') as f:
+                dependency_results = json.load(f)
+                
+            # Add your custom evaluation logic here
+            critical_vulnerabilities = len([
+                v for v in trivy_results.get('vulnerabilities', [])
+                if v.get('severity') == 'CRITICAL'
+            ])
+            
+            return critical_vulnerabilities == 0
+            
+        sys.exit(0 if check_scan_results() else 1)
+        EOF
+      register: security_evaluation
+
+    # Secure Deployment
+    - name: Deploy application if security checks pass
+      block:
+        - name: Pull latest application code
+          git:
+            repo: "{{ git_repo }}"
+            dest: /opt/{{ app_name }}
+            version: main
+            
+        - name: Apply security configurations
+          template:
+            src: security-config.j2
+            dest: /opt/{{ app_name }}/config/security.yml
+            mode: '0600'
+
+        - name: Deploy with security context
+          command: >
+            docker run 
+            --security-opt no-new-privileges
+            --cap-drop ALL
+            --cap-add NET_BIND_SERVICE
+            {{ docker_image }}
+      when: security_evaluation.rc == 0
+
+    # Security Monitoring Setup
+    - name: Configure security monitoring
+      block:
+        - name: Install monitoring agents
+          package:
+            name:
+              - auditd
+              - fail2ban
+              - ossec-hids
+            state: present
+
+        - name: Configure SIEM integration
+          template:
+            src: siem-config.j2
+            dest: /etc/ossec-hids/ossec.conf
+            mode: '0644'
+          notify: Restart OSSEC
+
+        - name: Setup audit rules
+          template:
+            src: audit-rules.j2
+            dest: /etc/audit/rules.d/security.rules
+            mode: '0600'
+          notify: Restart Auditd
+
+  handlers:
+    - name: Restart OSSEC
+      service:
+        name: ossec-hids
+        state: restarted
+
+    - name: Restart Auditd
+      service:
+        name: auditd
+        state: restarted
+
+  post_tasks:
+    - name: Generate security report
+      template:
+        src: security-report.j2
+        dest: "{{ scan_results_dir }}/security-report.html"
+        mode: '0644'
+
+    - name: Notify security team
+      mail:
+        to: security-team@example.com
+        subject: "Security Scan Results - {{ app_name }}"
+        body: "Please review the security scan results at {{ scan_results_dir }}/security-report.html"
+      when: security_evaluation.rc != 0

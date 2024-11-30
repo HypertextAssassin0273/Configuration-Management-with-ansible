@@ -1,0 +1,42 @@
+---
+- name: Create user with password
+  hosts: all
+  become: yes
+  vars:
+    username: "zubair"
+    # Password hash for "1234" - in production, use vault for passwords
+    password: "{{ '1234' | password_hash('sha512') }}"
+  
+  tasks:
+    - name: Install sudo package
+      package:
+        name: sudo
+        state: present
+    
+    - name: Create user account
+      user:
+        name: "{{ username }}"
+        password: "{{ password }}"
+        state: present
+        shell: /bin/bash
+        create_home: yes
+        
+    - name: Create sudoers.d directory if it doesn't exist
+      file:
+        path: /etc/sudoers.d
+        state: directory
+        mode: '0755'
+        
+    - name: Ensure user has sudo privileges
+      lineinfile:
+        path: /etc/sudoers.d/{{ username }}
+        line: "{{ username }} ALL=(ALL) ALL"
+        create: yes
+        mode: '0440'
+        validate: /usr/sbin/visudo -cf %s
+      register: sudo_config
+      
+    - name: Verify sudo access
+      command: sudo -l -U {{ username }}
+      register: sudo_check
+      changed_when: false

@@ -1,0 +1,23 @@
+# vsftpd configuration
+listen=YES
+listen_port={{ ftp_port }}
+anonymous_enable=NO
+local_enable=YES
+write_enable=YES
+local_umask=022
+dirmessage_enable=YES
+use_localtime=YES
+xferlog_enable=YES
+connect_from_port_20=YES
+chroot_local_user=YES
+allow_writeable_chroot=NO
+secure_chroot_dir=/var/run/vsftpd/empty
+userlist_enable=YES
+userlist_file=/etc/vsftpd.userlist
+userlist_deny=NO
+pam_service_name=vsftpd
+pasv_enable=YES
+pasv_min_port=40000
+pasv_max_port=40100
+user_sub_token=$USER
+local_root=/home/$USER/ftp

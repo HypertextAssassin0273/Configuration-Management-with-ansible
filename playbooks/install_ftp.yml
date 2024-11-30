@@ -1,0 +1,107 @@
+---
+- name: Install and configure FTP server
+  hosts: all
+  become: yes
+  vars:
+    ftp_port: "{{ ftp_port }}"
+    ftp_username: "{{ ftp_username }}"
+    ftp_password: "{{ ftp_password }}"
+
+  tasks:
+    - name: Install required packages
+      apt:
+        name: 
+          - vsftpd
+          - ufw
+        state: present
+        update_cache: yes
+
+    - name: Stop vsftpd service before configuration
+      service:
+        name: vsftpd
+        state: stopped
+
+    - name: Create vsftpd configuration directory
+      file:
+        path: /etc/vsftpd
+        state: directory
+        mode: '0755'
+
+    - name: Create FTP user
+      user:
+        name: "{{ ftp_username }}"
+        password: "{{ ftp_password | password_hash('sha512') }}"
+        shell: /bin/bash
+        home: "/home/{{ ftp_username }}"
+        create_home: yes
+
+    - name: Create FTP directory structure
+      file:
+        path: "/home/{{ ftp_username }}/ftp"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create upload directory
+      file:
+        path: "/home/{{ ftp_username }}/ftp/upload"
+        state: directory
+        owner: "{{ ftp_username }}"
+        group: "{{ ftp_username }}"
+        mode: '0755'
+
+    - name: Set proper permissions on home directory
+      file:
+        path: "/home/{{ ftp_username }}"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create vsftpd.conf from template
+      template:
+        src: templates/vsftpd.conf.j2
+        dest: /etc/vsftpd.conf
+        mode: '0644'
+      notify: Restart vsftpd
+
+    - name: Add FTP user to allowed users list
+      copy:
+        dest: /etc/vsftpd.userlist
+        content: "{{ ftp_username }}"
+        mode: '0644'
+
+    - name: Create secure chroot directory
+      file:
+        path: /var/run/vsftpd/empty
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Configure UFW rules
+      block:
+        - name: Allow FTP command port
+          command: "ufw allow {{ ftp_port }}/tcp"
+          
+        - name: Allow FTP passive ports
+          command: "ufw allow 40000:40100/tcp"
+      ignore_errors: yes
+
+    - name: Ensure vsftpd is running and enabled
+      service:
+        name: vsftpd
+        state: started
+        enabled: yes
+
+    - name: Wait for vsftpd to start
+      wait_for:
+        port: "{{ ftp_port }}"
+        timeout: 30
+        state: started
+
+  handlers:
+    - name: Restart vsftpd
+      service:
+        name: vsftpd
+        state: restarted

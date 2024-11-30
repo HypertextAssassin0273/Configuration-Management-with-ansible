@@ -1,0 +1,43 @@
+---
+- name: Install and configure nginx
+  hosts: all
+  become: yes
+  vars:
+    nginx_port: "{{ nginx_port | default('80') }}"
+    server_name: "{{ server_name | default('example.com') }}"
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install nginx
+      package:
+        name: nginx
+        state: present
+
+    - name: Create nginx configuration
+      template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/default
+      notify: Reload nginx
+
+    - name: Enable nginx site
+      file:
+        src: /etc/nginx/sites-available/default
+        dest: /etc/nginx/sites-enabled/default
+        state: link
+      notify: Reload nginx
+
+    - name: Start nginx service
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Reload nginx
+      service:
+        name: nginx
+        state: reloaded
