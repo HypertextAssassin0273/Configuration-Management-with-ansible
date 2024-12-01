@@ -1,1 +1,1 @@
-pip3 install flask flask_session docker ansible_runner 
+pip3 install flask flask_session docker ansible_runner passlib

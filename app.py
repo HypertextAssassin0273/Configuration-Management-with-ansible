@@ -1,9 +1,10 @@
 ## DEPENDENCIES ##
 from flask import Flask, render_template, request, jsonify, session # external
+from werkzeug.security import generate_password_hash # built-in
 from flask_session import Session # external
 
-import docker, ansible_runner # external
 import os, shutil, signal, atexit, json, yaml, logging, tempfile # built-in
+import docker, ansible_runner # external
 
 
 ## GLOBAL CONFIGURATION ##
