@@ -1,59 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configuration Management with Ansible</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3B82F6',
-                        secondary: '#10B981',
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Configuration Management with Ansible</title>
+
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            body {
+                background-image: url('https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80');
+                background-size: cover;
+                background-position: center;
+                background-attachment: fixed;
+            }
+        </style>
+
+        <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            primary: '#3B82F6',
+                            secondary: '#10B981',
+                            background: '#F3F4F6',
+                        },
+                        fontFamily: {
+                            sans: ['Inter', 'sans-serif']
+                        },
                     }
                 }
             }
-        }
-    </script>
-</head>
-<body class="bg-gray-100 min-h-screen font-sans">
-    <nav class="bg-primary text-white p-4">
-        <div class="container mx-auto flex justify-between items-center">
-            <a href="/" class="text-2xl font-bold">CONFIGURATION MANAGEMENT WITH ANSIBLE</a>
-            <div>
-                <a href="/" class="mr-4 hover:underline">HOME</a>
-                <a href="/configure" class="hover:underline">CONFIGURE</a>
+        </script>
+    </head>
+
+    <header>
+        <nav class="bg-white shadow-md">
+            <div class="container mx-auto px-6 py-3">
+                <div class="flex justify-between items-center">
+                    <a href="/" class="text-2xl font-bold text-primary">CONFIGURATION MANAGEMENT</a>
+                    <div class="space-x-4">
+                        <a href="/" class="text-gray-700 hover:text-primary transition duration-300">HOME</a>
+                        <a href="/configure" class="text-gray-700 hover:text-primary transition duration-300">CONFIGURE</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <body class="bg-background min-h-screen font-sans text-gray-900">
+        <section class="container mx-auto px-6 py-8">
+            <h1 class="text-4xl font-bold text-center mb-8 text-white shadow-text">Ansible Manager</h1>
+
+            <div class="bg-white rounded-lg shadow-xl p-6 mb-8">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800">Advance Configuration</h2>
+                <form class="space-y-4" id="configForm">
+                    <div>
+                        <label for="configOption" class="block text-sm font-medium text-gray-700">Configuration Option</label>
+                        <select id="configOption" name="configOption" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                            <option value="nginx">Install and configure nginx webserver</option>
+                            <option value="ftp">Install and configure FTP server</option>
+                            <option value="custom">Run custom playbook</option>
+                        </select>
+                    </div>
+
+                    <div id="nginxConfig" class="space-y-4">
+                        <div>
+                            <label for="nginxPort" class="block text-sm font-medium text-gray-700">Nginx Port</label>
+                            <input type="number" id="nginxPort" name="nginxPort" value="80" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                        </div>
+                        <div>
+                            <label for="nginxServerName" class="block text-sm font-medium text-gray-700">Nginx Server Name</label>
+                            <input type="text" id="nginxServerName" name="nginxServerName" value="example.com" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                        </div>
+                    </div>
+
+                    <div id="ftpConfig" class="space-y-4" style="display: none;">
+                        <div>
+                            <label for="ftpPort" class="block text-sm font-medium text-gray-700">FTP Port</label>
+                            <input type="number" id="ftpPort" name="ftpPort" value="21" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                        </div>
+                        <div>
+                            <label for="ftpUsername" class="block text-sm font-medium text-gray-700">FTP Username</label>
+                            <input type="text" id="ftpUsername" name="ftpUsername" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                        </div>
+                        <div>
+                            <label for="ftpPassword" class="block text-sm font-medium text-gray-700">FTP Password</label>
+                            <input type="password" id="ftpPassword" name="ftpPassword" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                        </div>
+                    </div>
+
+                    <div id="customPlaybookConfig" class="space-y-4" style="display: none;">
+                        <div>
+                            <label for="customPlaybook" class="block text-sm font-medium text-gray-700">Custom Playbook</label>
+                            <input type="file" id="customPlaybook" name="customPlaybook" accept=".yml,.yaml" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                        </div>
+                    </div>
+
+                    <div>
+                        <button type="submit" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Save Configuration
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <script>
+            /* Handling Advance Configuration Form */
+            const configOption = document.getElementById('configOption');
+            const nginxConfig = document.getElementById('nginxConfig');
+            const ftpConfig = document.getElementById('ftpConfig');
+            const customPlaybookConfig = document.getElementById('customPlaybookConfig');
+            const configForm = document.getElementById('configForm');
+
+            configOption.addEventListener('change', function() { // option switching logic
+                if (this.value === 'nginx') {
+                    nginxConfig.style.display = 'block';
+                    ftpConfig.style.display = 'none';
+                    customPlaybookConfig.style.display = 'none';
+                }
+                else if (this.value === 'ftp') {
+                    nginxConfig.style.display = 'none';
+                    ftpConfig.style.display = 'block';
+                    customPlaybookConfig.style.display = 'none';
+                }
+                else if (this.value === 'custom') {
+                    nginxConfig.style.display = 'none';
+                    ftpConfig.style.display = 'none';
+                    customPlaybookConfig.style.display = 'block';
+                }
+                else {
+                    nginxConfig.style.display = 'none';
+                    ftpConfig.style.display = 'none';
+                    customPlaybookConfig.style.display = 'none';
+                }
+            });
+
+            configForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+
+                if (configOption.value === 'custom') {
+                    const customPlaybookFile = document.getElementById('customPlaybook').files[0];
+                    if (customPlaybookFile) {
+                        formData.append('customPlaybook', customPlaybookFile);
+                    } else {
+                        alert('Please select a custom playbook file.');
+                        return;
+                    }
+                }
+
+                const submitButton = this.querySelector('button[type="submit"]');
+                submitButton.disabled = true;
+                submitButton.textContent = 'Saving...';
+
+                axios.post('/save_config', formData)
+                .then(response => {
+                    alert(response.data.message); // add notification in div instead of alert, [NOTE] message -> error
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Save Configuration';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while saving the configuration. Please check the console for more details.');
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Save Configuration';
+                });
+            });
+        </script>
+    </body>
+
+    <!-- [NOTE] not flexible for working with page/body that is not fully covered, need some logic to keep footer always at bottom -->
+    <!-- <footer class="bg-white shadow-md"> 
+        <div class="container mx-auto px-6 py-3">
+            <div class="text-center text-gray-700">
+                <p>&copy; 2024 <a href="https://github.com/HypertextAssassin0273/Configuration_Management_with_Ansible">HypertextAssassin0273</a>
             </div>
         </div>
-    </nav>
-
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Configure Docker Container</h1>
-        
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 class="text-2xl font-semibold mb-4">Docker Settings</h2>
-            <form class="space-y-4">
-                <div>
-                    <label for="dockerImage" class="block text-sm font-medium text-gray-700">Docker Image</label>
-                    <input type="text" id="dockerImage" name="dockerImage" value="debian:bullseye-slim" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
-                </div>
-                <div>
-                    <label for="maxContainers" class="block text-sm font-medium text-gray-700">Max Containers</label>
-                    <input type="number" id="maxContainers" name="maxContainers" value="100" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
-                </div>
-                <div>
-                    <label for="sshKeyPath" class="block text-sm font-medium text-gray-700">SSH Key Path</label>
-                    <input type="text" id="sshKeyPath" name="sshKeyPath" value="~/.ssh/docker_container_key" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
-                </div>
-                <div>
-                    <button type="submit" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
-                        Save Configuration
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</body>
+    </footer> -->
 </html>

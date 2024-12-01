@@ -1,283 +1,320 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configuration Management with Ansible</title>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3B82F6',
-                        secondary: '#10B981',
-                        danger: '#EF4444',
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Configuration Management with Ansible</title>
+
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            body {
+                background-image: url('https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80');
+                background-size: cover;
+                background-position: center;
+                background-attachment: fixed;
+            }
+        </style>
+
+        <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            primary: '#3B82F6',
+                            secondary: '#10B981',
+                            danger: '#EF4444',
+                            background: '#F3F4F6',
+                        },
+                        fontFamily: {
+                            sans: ['Inter', 'sans-serif']
+                        }
                     }
                 }
             }
-        }
-    </script>
-</head>
-<body class="bg-gray-100 min-h-screen font-sans">
-    <nav class="bg-primary text-white p-4">
-        <div class="container mx-auto flex justify-between items-center">
-            <a href="/" class="text-2xl font-bold">CONFIGURATION MANAGEMENT WITH ANSIBLE</a>
-            <div>
-                <a href="/" class="mr-4 hover:underline">HOME</a>
-                <a href="/configure" class="hover:underline">CONFIGURE</a>
-            </div>
-        </div>
-    </nav>
+        </script>
+    </head>
 
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Ansible & Docker Manager</h1>
-        
-        <div class="bg-white rounded-lg shadow-md mb-8">
-            <div class="flex border-b">
-                <button id="spawnTab" class="flex-1 py-4 px-6 text-lg font-semibold focus:outline-none" aria-selected="true" role="tab" aria-controls="spawnPanel">
-                    Spawn
-                </button>
-                <button id="commandTab" class="flex-1 py-4 px-6 text-lg font-semibold focus:outline-none" aria-selected="false" role="tab" aria-controls="commandPanel">
-                    Run Commands
-                </button>
-            </div>
-            
-            <div id="spawnPanel" role="tabpanel" aria-labelledby="spawnTab" class="p-6">
-                <h2 class="text-2xl font-semibold mb-4">Spawn Containers</h2>
-                <div class="flex items-center justify-center space-x-4">
-                    <label for="numMachines" class="text-lg font-medium text-gray-700">Number of machines to spawn:</label>
-                    <input type="number" id="numMachines" min="1" value="1" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
-                    <button onclick="spawnMachines()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
-                        Spawn New
-                    </button>
-                    <button onclick="fetchStoppedMachines()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
-                        Fetch Old
-                    </button>
-                    <button onclick="forAllMachines()" class="bg-danger text-white font-semibold px-6 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
-                        Stop All
-                    </button>
-                    <button onclick="forAllMachines('remove')" class="bg-danger text-white font-semibold px-6 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
-                        Remove All
-                    </button>
-                    <!-- bg (color) options: bg-secondary, bg-danger, bg-green-600 ?? -->
+    <header>
+        <nav class="bg-white shadow-md">
+            <div class="container mx-auto px-6 py-3">
+                <div class="flex justify-between items-center">
+                    <a href="/" class="text-2xl font-bold text-primary">CONFIGURATION MANAGEMENT</a>
+                    <div class="space-x-4">
+                        <a href="/" class="text-gray-700 hover:text-primary transition duration-300">HOME</a>
+                        <a href="/configure" class="text-gray-700 hover:text-primary transition duration-300">CONFIGURE</a>
+                    </div>
                 </div>
-                <div id="machineInfo" class="mt-8 space-y-4"></div>
             </div>
-            
-            <div id="commandPanel" role="tabpanel" aria-labelledby="commandTab" class="p-6 hidden">
-                <h2 class="text-2xl font-semibold mb-4">Run Commands</h2>
-                <div class="flex items-center justify-center space-x-4">
-                    <label for="command" class="text-lg font-medium text-gray-700">Command to run:</label>
-                    <input type="text" id="command" placeholder="Enter command" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary flex-grow">
-                    <button onclick="runCommand()" class="bg-secondary text-white font-semibold px-6 py-2 rounded-md hover:bg-green-600 transition duration-300 ease-in-out transform hover:scale-105">
-                        Run Command
+        </nav>
+    </header>
+
+    <body class="bg-background min-h-screen font-sans text-gray-900">
+        <section class="container mx-auto px-6 py-8">
+            <h1 class="text-4xl font-bold text-center mb-8 text-white shadow-text">Docker Manager</h1>
+
+            <div class="bg-white rounded-lg shadow-xl overflow-hidden">
+                <div class="flex border-b">
+                    <button id="spawnTab" class="flex-1 py-4 px-6 text-lg font-semibold focus:outline-none transition duration-300" aria-selected="true" role="tab" aria-controls="spawnPanel">
+                        Spawn
+                    </button>
+                    <button id="commandTab" class="flex-1 py-4 px-6 text-lg font-semibold focus:outline-none transition duration-300" aria-selected="false" role="tab" aria-controls="commandPanel">
+                        Run Commands
                     </button>
                 </div>
-                <div id="commandResults" class="mt-8 space-y-4"></div>
+
+                <div id="spawnPanel" role="tabpanel" aria-labelledby="spawnTab" class="p-6">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-800">Spawn Containers</h2>
+                    <div class="flex items-center justify-center space-x-4 mb-6">
+                        <label for="numMachines" class="text-lg font-medium text-gray-700">Number of machines to spawn:</label>
+                        <input type="number" id="numMachines" min="1" value="1" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+
+                        <button onclick="spawnMachines()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Spawn New
+                        </button>
+
+                        <button onclick="fetchStoppedMachines()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Fetch Old
+                        </button>
+
+                        <button onclick="forAllMachines()" class="bg-danger text-white font-semibold px-6 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Stop All
+                        </button>
+
+                        <button onclick="forAllMachines('remove')" class="bg-danger text-white font-semibold px-6 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Remove All
+                        </button>
+
+                        <!-- bg (color) options: bg-secondary, bg-danger, bg-green-600 ?? -->
+                    </div>
+
+                    <div id="machineInfo" class="space-y-4"></div>
+                </div>
+            
+                <div id="commandPanel" role="tabpanel" aria-labelledby="commandTab" class="p-6 hidden">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-800">Run Commands</h2>
+                    <div class="flex items-center justify-center space-x-4 mb-6">
+                        <label for="command" class="text-lg font-medium text-gray-700">Command to run:</label>
+                        <textarea id="command" placeholder="Enter command" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary flex-grow"></textarea>
+
+                        <button onclick="runCommand()" class="bg-secondary text-white font-semibold px-6 py-2 rounded-md hover:bg-green-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Run Command
+                        </button>
+                    </div>
+
+                    <div id="commandResults" class="space-y-4"></div>
+                </div>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <script>
-        let machineInfoData = [];
+        <script>
+            let machineInfoData = [];
 
-        /* Fetch Machine Info on Page Load */
-        window.onload = function() {
-            axios.get('/get_machine_info')
-            .then(function (response) {
-                machineInfoData = response.data;
-                displayMachineInfo(machineInfoData);
-            })
-            .catch(function (error) {
-                console.error('Error fetching machine info:', error);
+            /* Fetch Machine Info on Page Load */
+            window.onload = function() {
+                axios.get('/get_machine_info')
+                .then(function (response) {
+                    machineInfoData = response.data;
+                    displayMachineInfo(machineInfoData);
+                })
+                .catch(function (error) {
+                    console.error('Error fetching machine info:', error);
+                    const machineInfo = document.getElementById('machineInfo');
+                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error fetching machine info: ${error.response?.data?.error || error.message}</div>`;
+                });
+            };
+
+
+            /* Handling Tab Switching */
+            const spawnTab = document.getElementById('spawnTab');
+            const commandTab = document.getElementById('commandTab');
+            const spawnPanel = document.getElementById('spawnPanel');
+            const commandPanel = document.getElementById('commandPanel');
+
+            function switchTab(tab, panel) {
+                [spawnTab, commandTab].forEach(t => {
+                    t.classList.remove('text-primary', 'border-b-2', 'border-primary');
+                    t.setAttribute('aria-selected', 'false');
+                });
+                [spawnPanel, commandPanel].forEach(p => p.classList.add('hidden'));
+
+                tab.classList.add('text-primary', 'border-b-2', 'border-primary');
+                tab.setAttribute('aria-selected', 'true');
+                panel.classList.remove('hidden');
+            }
+
+            spawnTab.addEventListener('click', () => switchTab(spawnTab, spawnPanel));
+            commandTab.addEventListener('click', () => switchTab(commandTab, commandPanel));
+
+
+            /* Handling Machine Management */
+            function spawnMachines() {
+                const numMachines = document.getElementById('numMachines').value;
                 const machineInfo = document.getElementById('machineInfo');
-                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error fetching machine info: ${error.response?.data?.error || error.message}</div>`;
-            });
-        };
+                machineInfo.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Spawning machines...</div>';
 
+                axios.post('/spawn', `num_machines=${numMachines}`, {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                })
+                .then(function (response) { // [NOTE] we can safely use arrow function here (since we don't need to access 'this')
+                    machineInfo.innerHTML = '';
+                    if (response.data.error) {
+                        machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
+                        return;
+                    }
+                    machineInfoData = response.data;
+                    displayMachineInfo(machineInfoData);
+                })
+                .catch(function (error) {
+                    console.error('Error:', error);
+                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error spawning machines: ${error.response?.data?.error || error.message}</div>`;
+                });
+            }
 
-        /* Handling Tab Switching */
-        const spawnTab = document.getElementById('spawnTab');
-        const commandTab = document.getElementById('commandTab');
-        const spawnPanel = document.getElementById('spawnPanel');
-        const commandPanel = document.getElementById('commandPanel');
+            function fetchStoppedMachines() {
+                const machineInfo = document.getElementById('machineInfo');
+                machineInfo.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Fetching stopped machines...</div>';
 
-        function switchTab(tab, panel) {
-            [spawnTab, commandTab].forEach(t => {
-                t.classList.remove('text-primary', 'border-b-2', 'border-primary');
-                t.setAttribute('aria-selected', 'false');
-            });
-            [spawnPanel, commandPanel].forEach(p => p.classList.add('hidden'));
+                axios.post('/fetch_stopped_containers')
+                .then(function (response) {
+                    machineInfo.innerHTML = '';
+                    if (response.data.error) {
+                        machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
+                        return;
+                    }
+                    machineInfoData = response.data;
+                    displayMachineInfo(machineInfoData);
+                })
+                .catch(function (error) {
+                    console.error('Error:', error);
+                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error fetching stopped machines: ${error.response?.data?.error || error.message}</div>`;
+                });
+            }
 
-            tab.classList.add('text-primary', 'border-b-2', 'border-primary');
-            tab.setAttribute('aria-selected', 'true');
-            panel.classList.remove('hidden');
-        }
-
-        spawnTab.addEventListener('click', () => switchTab(spawnTab, spawnPanel));
-        commandTab.addEventListener('click', () => switchTab(commandTab, commandPanel));
-
-
-        /* Handling Machine Management */
-        function spawnMachines() {
-            const numMachines = document.getElementById('numMachines').value;
-            const machineInfo = document.getElementById('machineInfo');
-            machineInfo.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Spawning machines...</div>';
-
-            axios.post('/spawn', `num_machines=${numMachines}`, {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                }
-            })
-            .then(function (response) {
+            function displayMachineInfo(machineInfoData) {
+                const machineInfo = document.getElementById('machineInfo');
                 machineInfo.innerHTML = '';
-                if (response.data.error) {
-                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
-                    return;
-                }
-                machineInfoData = response.data;
-                displayMachineInfo(machineInfoData);
-            })
-            .catch(function (error) {
-                console.error('Error:', error);
-                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error spawning machines: ${error.response?.data?.error || error.message}</div>`;
-            });
-        }
+                machineInfoData.forEach((machine, index) => {
+                    const machineDiv = document.createElement('div');
+                    machineDiv.className = 'bg-white rounded-lg shadow-md p-6 transition duration-300 ease-in-out transform hover:scale-105 mb-4';
+                    machineDiv.innerHTML = `
+                        <h3 class="text-2xl font-semibold mb-4 text-gray-800">Machine ${index + 1}</h3>
+                        <div class="space-y-2">
+                            <p class="text-gray-600"><span class="font-medium text-gray-700">Container ID:</span> ${machine.container_id}</p>
+                            <p class="text-gray-600"><span class="font-medium text-gray-700">Host Port:</span> ${machine.host_port}</p>
+                            <p class="text-gray-600"><span class="font-medium text-gray-700">SSH Command:</span> <code class="bg-gray-100 px-2 py-1 rounded">${machine.host_command}</code></p>
+                            <p class="text-gray-600"><span class="font-medium text-gray-700">SSH Status:</span> <span class="${machine.ssh_status === 'Ready' ? 'text-green-600' : 'text-red-600'} font-semibold">${machine.ssh_status}</span></p>
+                        </div>
+                        <div class="mt-4">
+                            <button onclick="forSingleMachine('${machine.container_id}')" class="bg-danger text-white font-semibold px-4 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
+                                Stop
+                            </button>
+                            <button onclick="forSingleMachine('${machine.container_id}', 'remove')" class="bg-danger text-white font-semibold px-4 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
+                                Remove
+                            </button>
+                        </div>
+                    `;
+                    machineInfo.appendChild(machineDiv);
+                });
+            }
 
-        function fetchStoppedMachines() {
-            const machineInfo = document.getElementById('machineInfo');
-            machineInfo.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Fetching stopped machines...</div>';
+            function forAllMachines(action = 'stop') {
+                const machineInfo = document.getElementById('machineInfo');
+                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-gray-600">${action === 'stop' ? 'Stopping' : 'Removing'} all machines...</div>`;
 
-            axios.post('/fetch_stopped_containers')
-            .then(function (response) {
-                machineInfo.innerHTML = '';
-                if (response.data.error) {
-                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
-                    return;
-                }
-                machineInfoData = response.data;
-                displayMachineInfo(machineInfoData);
-            })
-            .catch(function (error) {
-                console.error('Error:', error);
-                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error fetching stopped machines: ${error.response?.data?.error || error.message}</div>`;
-            });
-        }
+                axios.post(`/${action}_all_containers`)
+                .then(function (response) {
+                    if (response.data.error) {
+                        machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
+                        return;
+                    }
+                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-green-600">${response.data.status}</div>`;
+                    machineInfoData = [];
+                })
+                .catch(function (error) {
+                    console.error('Error:', error);
+                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error stopping machines: ${error.response?.data?.error || error.message}</div>`;
+                });
+            }
 
-        function displayMachineInfo(machineInfoData) {
-            const machineInfo = document.getElementById('machineInfo');
-            machineInfo.innerHTML = '';
-            machineInfoData.forEach((machine, index) => {
-                const machineDiv = document.createElement('div');
-                machineDiv.className = 'bg-white rounded-lg shadow-md p-6 transition duration-300 ease-in-out transform hover:scale-105 mb-4';
-                machineDiv.innerHTML = `
-                    <h3 class="text-2xl font-semibold mb-4 text-gray-800">Machine ${index + 1}</h3>
-                    <div class="space-y-2">
-                        <p class="text-gray-600"><span class="font-medium text-gray-700">Container ID:</span> ${machine.container_id}</p>
-                        <p class="text-gray-600"><span class="font-medium text-gray-700">Host Port:</span> ${machine.host_port}</p>
-                        <p class="text-gray-600"><span class="font-medium text-gray-700">SSH Command:</span> <code class="bg-gray-100 px-2 py-1 rounded">${machine.host_command}</code></p>
-                        <p class="text-gray-600"><span class="font-medium text-gray-700">SSH Status:</span> <span class="${machine.ssh_status === 'Ready' ? 'text-green-600' : 'text-red-600'} font-semibold">${machine.ssh_status}</span></p>
-                    </div>
-                    <div class="mt-4">
-                        <button onclick="forSingleMachine('${machine.container_id}')" class="bg-danger text-white font-semibold px-4 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
-                            Stop
-                        </button>
-                        <button onclick="forSingleMachine('${machine.container_id}', 'remove')" class="bg-danger text-white font-semibold px-4 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
-                            Remove
-                        </button>
-                    </div>
-                `;
-                machineInfo.appendChild(machineDiv);
-            });
-        }
+            function forSingleMachine(containerId, action = 'stop') {
+                const machineInfo = document.getElementById('machineInfo');
+                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-gray-600">${action === 'stop' ? 'Stopping' : 'Removing'} machine ${containerId}...</div>`;
 
-        function forAllMachines(action = 'stop') {
-            const machineInfo = document.getElementById('machineInfo');
-            machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-gray-600">${action === 'stop' ? 'Stopping' : 'Removing'} all machines...</div>`;
-
-            axios.post(`/${action}_all_containers`)
-            .then(function (response) {
-                if (response.data.error) {
-                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
-                    return;
-                }
-                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-green-600">${response.data.status}</div>`;
-                machineInfoData = [];
-            })
-            .catch(function (error) {
-                console.error('Error:', error);
-                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error stopping machines: ${error.response?.data?.error || error.message}</div>`;
-            });
-        }
-
-        function forSingleMachine(containerId, action = 'stop') {
-            const machineInfo = document.getElementById('machineInfo');
-            machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-gray-600">${action === 'stop' ? 'Stopping' : 'Removing'} machine ${containerId}...</div>`;
-
-            axios.post(`/${action}_container`, `container_id=${containerId}`, {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                }
-            })
-            .then(function (response) {
-                if (response.data.error) {
-                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
-                    return;
-                }
-                machineInfoData = machineInfoData.filter(machine => machine.container_id !== containerId);
-                displayMachineInfo(machineInfoData);
-                machineInfo.insertAdjacentHTML('afterbegin', `<div class="text-center text-xl font-semibold text-green-600 mb-4">${response.data.status}</div>`);
-            })
-            .catch(function (error) {
-                console.error('Error:', error);
-                machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error stopping machine: ${error.response?.data?.error || error.message}</div>`;
-            });
-        }
+                axios.post(`/${action}_container`, `container_id=${containerId}`, {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                })
+                .then(function (response) {
+                    if (response.data.error) {
+                        machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
+                        return;
+                    }
+                    machineInfoData = machineInfoData.filter(machine => machine.container_id !== containerId);
+                    displayMachineInfo(machineInfoData);
+                    machineInfo.insertAdjacentHTML('afterbegin', `<div class="text-center text-xl font-semibold text-green-600 mb-4">${response.data.status}</div>`);
+                })
+                .catch(function (error) {
+                    console.error('Error:', error);
+                    machineInfo.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error stopping machine: ${error.response?.data?.error || error.message}</div>`;
+                });
+            }
 
 
-        /* Handling Command Execution */
-        function runCommand() {
-            const command = document.getElementById('command').value;
-            const commandResults = document.getElementById('commandResults');
-            commandResults.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Running command...</div>';
+            /* Handling Command Execution */
+            function runCommand() {
+                const command = document.getElementById('command').value;
+                const commandResults = document.getElementById('commandResults');
+                commandResults.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Running command...</div>';
 
-            axios.post('/run_command', `command=${encodeURIComponent(command)}`, {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                }
-            })
-            .then(function (response) {
+                axios.post('/run_command', `command=${encodeURIComponent(command)}`, {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                })
+                .then(function (response) {
+                    commandResults.innerHTML = '';
+                    if (response.data.error) {
+                        commandResults.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
+                        return;
+                    }
+                    displayCommandResults(response.data);
+                })
+                .catch(function (error) {
+                    console.error('Error:', error);
+                    commandResults.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error running command: ${error.response?.data?.error || error.message}</div>`;
+                });
+            }
+
+            function displayCommandResults(machineInfoData) {
+                const commandResults = document.getElementById('commandResults');
                 commandResults.innerHTML = '';
-                if (response.data.error) {
-                    commandResults.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error: ${response.data.error}</div>`;
-                    return;
-                }
-                displayCommandResults(response.data);
-            })
-            .catch(function (error) {
-                console.error('Error:', error);
-                commandResults.innerHTML = `<div class="text-center text-xl font-semibold text-red-600">Error running command: ${error.response?.data?.error || error.message}</div>`;
-            });
-        }
+                machineInfoData.forEach((machine, index) => {
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = 'bg-white rounded-lg shadow-md p-6 transition duration-300 ease-in-out transform hover:scale-105 mb-4';
+                    resultDiv.innerHTML = `
+                        <h3 class="text-2xl font-semibold mb-4 text-gray-800">Machine ${index + 1} (${machine.container_id})</h3>
+                        <div class="space-y-2">
+                            <p class="text-gray-600"><span class="font-medium text-gray-700">Command Result:</span></p>
+                            <pre class="bg-gray-100 p-2 rounded overflow-x-auto">${machine.command_result || 'N/A'}</pre>
+                        </div>
+                    `;
+                    commandResults.appendChild(resultDiv);
+                });
+            }
+        </script>
+    </body>
 
-        function displayCommandResults(machineInfoData) {
-            const commandResults = document.getElementById('commandResults');
-            commandResults.innerHTML = '';
-            machineInfoData.forEach((machine, index) => {
-                const resultDiv = document.createElement('div');
-                resultDiv.className = 'bg-white rounded-lg shadow-md p-6 transition duration-300 ease-in-out transform hover:scale-105 mb-4';
-                resultDiv.innerHTML = `
-                    <h3 class="text-2xl font-semibold mb-4 text-gray-800">Machine ${index + 1} (${machine.container_id})</h3>
-                    <div class="space-y-2">
-                        <p class="text-gray-600"><span class="font-medium text-gray-700">Command Result:</span></p>
-                        <pre class="bg-gray-100 p-2 rounded overflow-x-auto">${machine.command_result || 'N/A'}</pre>
-                    </div>
-                `;
-                commandResults.appendChild(resultDiv);
-            });
-        }
-    </script>
-</body>
+    <!-- [NOTE] not flexible for working with page/body that is not fully covered, need some logic to keep footer always at bottom -->
+    <!-- <footer class="bg-white shadow-md"> 
+        <div class="container mx-auto px-6 py-3">
+            <div class="text-center text-gray-700">
+                <p>&copy; 2024 <a href="https://github.com/HypertextAssassin0273/Configuration_Management_with_Ansible">HypertextAssassin0273</a>
+            </div>
+        </div>
+    </footer> -->
 </html>
