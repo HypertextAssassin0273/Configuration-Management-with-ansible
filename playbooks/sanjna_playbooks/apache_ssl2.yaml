@@ -1,0 +1,113 @@
+---
+- name: Install and configure Apache SSL server
+  hosts: all
+  become: yes
+  vars:
+    apache_port: "443"
+    server_name: "{{ server_name | default('example.com') }}"
+    ssl_cert_path: "/etc/ssl/certs/{{ server_name }}.crt"
+    ssl_key_path: "/etc/ssl/private/{{ server_name }}.key"
+
+  tasks:
+    # Step 1: Install Apache and SSL module
+    - name: Install Apache and SSL module
+      apt:
+        name:
+          - apache2
+          - ssl-cert
+          - ufw
+        state: present
+        update_cache: yes
+
+    # Step 2: Enable SSL module and default SSL site
+    - name: Enable SSL module
+      apache2_module:
+        name: ssl
+        state: present
+
+    - name: Enable default SSL site
+      apache2_site:
+        name: default-ssl
+        state: enabled
+
+    # Step 3: Create SSL directory for certificates
+    - name: Create SSL directory for certificates
+      file:
+        path: "/etc/ssl/private"
+        state: directory
+        mode: '0700'
+
+    # Step 4: Generate self-signed SSL certificate
+    - name: Generate self-signed SSL certificate
+      openssl_certificate:
+        path: "{{ ssl_cert_path }}"
+        privatekey_path: "{{ ssl_key_path }}"
+        common_name: "{{ server_name }}"
+        issuer: "Self-signed"
+        state: present
+        country_name: "US"
+        state_or_province_name: "California"
+        locality_name: "San Francisco"
+        organization_name: "Example Organization"
+        organizational_unit_name: "IT"
+        email_address: "admin@example.com"
+        days: 365
+
+    # Step 5: Create custom SSL virtual host configuration
+    - name: Create custom SSL virtual host configuration
+      copy:
+        dest: "/etc/apache2/sites-available/{{ server_name }}-ssl.conf"
+        content: |
+          <VirtualHost *:443>
+              ServerAdmin webmaster@{{ server_name }}
+              ServerName {{ server_name }}
+              
+              DocumentRoot /var/www/html
+              
+              SSLEngine on
+              SSLCertificateFile {{ ssl_cert_path }}
+              SSLCertificateKeyFile {{ ssl_key_path }}
+              
+              <Directory "/var/www/html">
+                  Options Indexes FollowSymLinks
+                  AllowOverride All
+                  Require all granted
+              </Directory>
+              
+              ErrorLog ${APACHE_LOG_DIR}/error.log
+              CustomLog ${APACHE_LOG_DIR}/access.log combined
+          </VirtualHost>
+        mode: '0644'
+      notify: Reload Apache
+
+    # Step 6: Enable the custom SSL site
+    - name: Enable the custom SSL site
+      apache2_site:
+        name: "{{ server_name }}-ssl"
+        state: enabled
+
+    # Step 7: Configure UFW firewall to allow HTTPS (port 443)
+    - name: Allow HTTPS through UFW
+      ufw:
+        rule: allow
+        port: "{{ apache_port }}"
+        proto: tcp
+
+    # Step 8: Ensure Apache is running and enabled
+    - name: Ensure Apache is running and enabled
+      service:
+        name: apache2
+        state: started
+        enabled: yes
+
+    - name: Wait for Apache to start
+      wait_for:
+        port: "{{ apache_port }}"
+        timeout: 30
+        state: started
+
+  handlers:
+    - name: Reload Apache
+      service:
+        name: apache2
+        state: reloaded
