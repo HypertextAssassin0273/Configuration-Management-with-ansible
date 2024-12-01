@@ -2,7 +2,9 @@ docker rm -v -f $(docker ps -qa)
 docker ps
 docker ps -a
 docker stats
+
 docker logs <container_id>
+docker logs <container_id> | grep done
 
 echo {1..5}
 echo hello >> greeting && cat greeting
