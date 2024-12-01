@@ -371,7 +371,7 @@ def FETCH_STOPPED_CONTAINERS_ROUTE():
 
 
 @app.route('/save_config', methods=['POST'])
-def SAVE_CONFIG_ROUTE(): # [NOTE] needs testing, [IMPROVEMENT] refactor or split into separate routes for each config option
+def SAVE_CONFIG_ROUTE(): # [NOTE] needs testing, [IMPROVEMENT] refactor or split into separate routes for each config option & add error handling
     config_option = request.form.get('configOption')
     if config_option == 'nginx':
         nginx_port = request.form.get('nginxPort')
