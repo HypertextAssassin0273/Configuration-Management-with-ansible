@@ -1,7 +1,7 @@
-env/*
 myenv/*
 flask_session/*
-artifacts/*
+playbooks/artifacts/*
+playbooks/env/*
 dummy.config.yml
 ftp_config.yml
 nginx_config.yml
