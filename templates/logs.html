@@ -3,20 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Application Logs</title>
-    
+    <title>Logs - Configuration Management</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            background-image: url('https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        danger: '#EF4444',
+                        background: '#F3F4F6',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
         }
-    </style>
+    </script>
 </head>
-
 <body class="bg-background min-h-screen font-sans text-gray-900">
     <header>
         <nav class="bg-white shadow-md">
@@ -34,69 +41,107 @@
     </header>
 
     <section class="container mx-auto px-6 py-8">
-        <h1 class="text-4xl font-bold text-center mb-8 text-white shadow-text">Application Logs</h1>
+        <h1 class="text-4xl font-bold text-center mb-8 text-primary">Application Logs</h1>
+        
+        <div class="bg-white rounded-lg shadow-xl overflow-hidden">
+            <div class="border-b border-gray-200">
+                <nav class="flex" role="tablist">
+                    <button class="px-6 py-4 text-gray-600 hover:text-gray-800 focus:outline-none {% if selected_tab == 'system' %}border-b-2 border-primary text-gray-800{% endif %}"
+                            role="tab"
+                            onclick="switchTab('system')">
+                        System Monitoring
+                    </button>
+                    <button class="px-6 py-4 text-gray-600 hover:text-gray-800 focus:outline-none {% if selected_tab == 'machine' %}border-b-2 border-primary text-gray-800{% endif %}"
+                            role="tab"
+                            onclick="switchTab('machine')">
+                        Machine Monitoring
+                    </button>
+                </nav>
+            </div>
 
-        <!-- Toggle for System Monitoring / Machine Monitoring -->
-        <div class="flex justify-center items-center space-x-4 mb-6">
-            <button id="systemToggle" class="px-6 py-2 bg-primary text-white font-semibold rounded-md shadow-md hover:bg-blue-600 transition duration-300">System Monitoring</button>
-            <button id="machineToggle" class="px-6 py-2 bg-gray-300 text-gray-700 font-semibold rounded-md shadow-md hover:bg-gray-400 transition duration-300">Machine Monitoring</button>
-        </div>
+            <div id="system-panel" class="tab-panel p-6">
+                <div class="max-h-96 overflow-y-auto bg-gray-50 rounded-md p-4">
+                    {% if app_logs %}
+                        {% for log in app_logs %}
+                            <div class="py-1 {% if 'ERROR' in log %}text-red-600{% elif 'WARNING' in log %}text-yellow-600{% elif 'INFO' in log %}text-blue-600{% else %}text-gray-700{% endif %}">
+                                {{ log }}
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="py-1 text-gray-700">
+                            No system logs available.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
 
-        <div class="bg-white rounded-lg shadow-xl overflow-hidden p-6">
-            <div class="log-container">
-                {% if logs %}
-                    {% for log in logs %}
-                        <div class="log-entry 
-                            {% if 'INFO' in log %}log-info{% elif 'DEBUG' in log %}log-debug{% 
-                            elif 'WARNING' in log %}log-warning{% elif 'ERROR' in log %}log-error{% endif %} 
-                            bg-gray-100 p-4 rounded-lg mb-4 shadow-md transition duration-300 ease-in-out transform hover:scale-105">
-                            {{ log }}
+            <div id="machine-panel" class="tab-panel p-6" style="display: none;">
+                <div class="mb-4">
+                    <select id="container-select" class="w-full max-w-xs p-2 border rounded-md"
+                            onchange="location.href='/logs?container_id=' + this.value + '&tab=machine'">
+                        <option value="">Select a container...</option>
+                        <option value="all" {% if selected_container == 'all' %}selected{% endif %}>All Containers</option>
+                        {% for machine in machine_info %}
+                            <option value="{{ machine.container_id }}" {% if machine.container_id == selected_container %}selected{% endif %}>
+                                Container: {{ machine.container_id }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {% if machine_logs %}
+                    {% for container_id, logs in machine_logs.items() %}
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {% for log_name, entries in logs.items() %}
+                                <div class="bg-white rounded-lg shadow-md p-4">
+                                    <h3 class="text-lg font-semibold mb-2 text-gray-800">{{ log_name }}</h3>
+                                    <div class="max-h-48 overflow-y-auto bg-gray-50 rounded-md p-2">
+                                        {% for entry in entries %}
+                                            <div class="py-1 text-gray-700">
+                                                {{ entry }}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endfor %}
                         </div>
                     {% endfor %}
                 {% else %}
-                    <p class="text-center text-xl font-semibold text-gray-600">No logs available.</p>
+                    <div class="py-1 text-gray-700">
+                        No machine monitoring logs available. Please ensure containers are running.
+                    </div>
                 {% endif %}
             </div>
         </div>
     </section>
 
     <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3B82F6',
-                        secondary: '#10B981',
-                        danger: '#EF4444',
-                        background: '#F3F4F6',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif']
-                    }
-                }
-            }
+        function switchTab(tabName) {
+            // Hide all panels
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                panel.style.display = 'none';
+            });
+            
+            // Show selected panel
+            document.getElementById(tabName + '-panel').style.display = 'block';
+            
+            // Update URL without page reload
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('tab', tabName);
+            window.history.pushState({}, '', `${window.location.pathname}?${urlParams}`);
+            
+            // Update tab styles
+            document.querySelectorAll('[role="tab"]').forEach(tab => {
+                tab.classList.remove('border-b-2', 'border-primary', 'text-gray-800');
+            });
+            event.currentTarget.classList.add('border-b-2', 'border-primary', 'text-gray-800');
         }
 
-        // Toggle button functionality
-        const systemToggle = document.getElementById('systemToggle');
-        const machineToggle = document.getElementById('machineToggle');
-
-        systemToggle.addEventListener('click', () => {
-            systemToggle.classList.add('bg-primary', 'text-white');
-            machineToggle.classList.remove('bg-primary', 'text-white');
-            machineToggle.classList.add('bg-gray-300', 'text-gray-700');
-            systemToggle.classList.remove('bg-gray-300', 'text-gray-700');
-            systemToggle.innerText = "System Monitoring";
-            machineToggle.innerText = "Machine Monitoring";
-        });
-
-        machineToggle.addEventListener('click', () => {
-            machineToggle.classList.add('bg-primary', 'text-white');
-            systemToggle.classList.remove('bg-primary', 'text-white');
-            systemToggle.classList.add('bg-gray-300', 'text-gray-700');
-            machineToggle.classList.remove('bg-gray-300', 'text-gray-700');
-            machineToggle.innerText = "Machine Monitoring";
-            systemToggle.innerText = "System Monitoring";
+        // Set initial tab on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const activeTab = urlParams.get('tab') || 'system';
+            document.querySelector(`[onclick="switchTab('${activeTab}')"]`).click();
         });
     </script>
 </body>

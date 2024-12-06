@@ -280,16 +280,162 @@ def SPAWN_MACHINES_ROUTE():
         app.logger.error(f"Error in spawn_machines: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/logs', methods=['GET'])
-def display_logs_from_file():
-    """Render the logs HTML page with logs read directly from the log file."""
-    log_file_path = 'app.log'  # Path to your log file
+
+
+
+@app.route('/logs')
+def display_logs():
+    """
+    Display system and machine monitoring logs.
+    Handles both single container and all container views.
+    Includes error handling and logging capabilities.
+    """
     try:
-        with open(log_file_path, 'r') as f:
-            logs = f.readlines()  # Read all lines from the log file
-    except FileNotFoundError:
-        logs = ["Log file not found. Please ensure the application is running and generating logs."]
-    return render_template('logs.html', logs=logs)
+        # Get session data and query parameters
+        machine_info = session.get('machine_info', [])
+        selected_container = request.args.get('container_id')
+        selected_tab = request.args.get('tab', 'system')
+
+        app_logs = []
+        machine_logs = {}
+
+        # Read application logs
+        try:
+            with open('app.log', 'r') as f:
+                app_logs = [line.strip() for line in f.readlines()]
+                app_logs.reverse()  # Show newest logs first
+        except FileNotFoundError:
+            app.logger.warning("Application log file not found")
+            app_logs = ["No application logs available"]
+        except Exception as e:
+            app.logger.error(f"Error reading application logs: {str(e)}")
+            app_logs = [f"Error reading logs: {str(e)}"]
+
+        # If a container is selected, fetch machine logs
+        if selected_container:
+            try:
+                # Define monitoring paths for different log types
+                monitoring_paths = {
+                    'CPU Usage': '/var/log/infrastructure_monitoring/cpu_usage.log',
+                    'Memory Usage': '/var/log/infrastructure_monitoring/memory_usage.log',
+                    'Disk Usage': '/var/log/infrastructure_monitoring/disk_usage.log',
+                    'Network Stats': '/var/log/infrastructure_monitoring/network.log',
+                    'System Load': '/var/log/infrastructure_monitoring/load.log',
+                    'Process List': '/var/log/infrastructure_monitoring/processes.log',
+                    'System Updates': '/var/log/infrastructure_monitoring/updates.log',
+                    'Security Alerts': '/var/log/infrastructure_monitoring/security.log'
+                }
+
+                # Select containers to monitor
+                if selected_container == 'all':
+                    containers_to_check = machine_info
+                else:
+                    containers_to_check = [m for m in machine_info if m['container_id'] == selected_container]
+
+                if not containers_to_check:
+                    raise ValueError(f"No containers found matching ID: {selected_container}")
+
+                # Prepare Ansible inventory for selected containers
+                inventory = {
+                    f"container_{machine['container_id']}": {
+                        "ansible_host": "localhost",
+                        "ansible_port": machine['host_port'],
+                        "ansible_user": "root",
+                        "ansible_ssh_private_key_file": ssh_key_path,
+                        "ansible_ssh_extra_args": "-o StrictHostKeyChecking=no"
+                    }
+                    for machine in containers_to_check
+                }
+
+                # Fetch logs for each monitoring type
+                for log_name, log_path in monitoring_paths.items():
+                    app.logger.debug(f"Fetching {log_name} logs from path: {log_path}")
+                    
+                    playbook_content = f'''
+                    - name: Fetch {log_name} logs
+                      hosts: all
+                      tasks:
+                        - name: Check if log file exists
+                          stat:
+                            path: {log_path}
+                          register: log_file
+
+                        - name: Read log file if it exists
+                          command: "tail -n 50 {log_path}"
+                          register: log_content
+                          when: log_file.stat.exists
+                          ignore_errors: yes
+
+                        - name: Set default message if file doesn't exist
+                          set_fact:
+                            log_content:
+                              stdout: "No {log_name} logs available"
+                          when: not log_file.stat.exists
+                    '''
+                    
+                    # Create temporary playbook file
+                    playbook_file = create_temp_file(playbook_content, '.yml')
+                    
+                    try:
+                        # Run Ansible playbook and get results
+                        results = run_ansible(inventory, f"cat {log_path}")
+                        
+                        # Process results for each container
+                        for container_id, content in results.items():
+                            machine_id = container_id.split('_')[1]  # Extract container ID
+                            
+                            if machine_id not in machine_logs:
+                                machine_logs[machine_id] = {}
+                            
+                            # Split log content into lines and clean up
+                            log_entries = content.strip().split('\n') if content else ["No logs available"]
+                            machine_logs[machine_id][log_name] = [
+                                entry.strip() for entry in log_entries if entry.strip()
+                            ]
+
+                    except Exception as e:
+                        app.logger.error(f"Error fetching {log_name} logs: {str(e)}")
+                        if selected_container != 'all':
+                            machine_logs[selected_container] = {
+                                log_name: [f"Error fetching logs: {str(e)}"]
+                            }
+                    finally:
+                        cleanup_files([playbook_file])
+
+            except Exception as e:
+                app.logger.error(f"Error processing machine logs: {str(e)}")
+                return render_template(
+                    'logs.html',
+                    error=f"Error processing machine logs: {str(e)}",
+                    app_logs=app_logs,
+                    machine_logs={},
+                    machine_info=machine_info,
+                    selected_container=selected_container,
+                    selected_tab=selected_tab
+                )
+
+        # Render template with all gathered logs
+        return render_template(
+            'logs.html',
+            app_logs=app_logs,
+            machine_logs=machine_logs,
+            machine_info=machine_info,
+            selected_container=selected_container,
+            selected_tab=selected_tab,
+            error=None
+        )
+
+    except Exception as e:
+        app.logger.error(f"Unexpected error in display_logs: {str(e)}")
+        return render_template(
+            'logs.html',
+            error=f"Unexpected error: {str(e)}",
+            app_logs=["Error loading logs"],
+            machine_logs={},
+            machine_info=machine_info,
+            selected_container=selected_container,
+            selected_tab=selected_tab
+        )
 
 @app.route('/run_command', methods=['POST'])
 def RUN_COMMAND_ROUTE():
