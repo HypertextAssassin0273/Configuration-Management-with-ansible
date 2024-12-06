@@ -126,7 +126,7 @@ def cleanup_files(file_paths):
             os.unlink(file_path) # removes the file
 
 
-def run_ansible(hosts, command):
+def run_ansible(hosts, command): # [NOTE] shell command execution will not work with other shells like zsh, fish, etc.
     """
     Runs an Ansible playbook on specified hosts with a given command.
     """
@@ -146,8 +146,8 @@ def run_ansible(hosts, command):
         - name: Run custom command on all hosts
           hosts: all
           tasks:
-            - name: Execute custom command
-              shell: {command}
+            - name: Execute custom command (in interactive bash shell)
+              shell: bash -i -c "{command}"
               register: command_output
             - debug:
                 var: command_output.stdout
@@ -258,7 +258,7 @@ def SPAWN_MACHINES_ROUTE():
 def RUN_COMMAND_ROUTE():
     try:
         command = request.form['command']
-        if not command: # [IMPROVEMENT] ensure that command text-box can accept multi-line commands & also accepts: ". / | & {} () etc" 
+        if not command:
             return jsonify({"error": "Invalid command."}), 400
 
         machine_info = session.get('machine_info', [])
@@ -372,7 +372,12 @@ def FETCH_STOPPED_CONTAINERS_ROUTE():
 
 
 @app.route('/save_config', methods=['POST'])
-def SAVE_CONFIG_ROUTE(): # [NOTE] needs testing, [IMPROVEMENT] refactor or split into separate routes for each config option & add error handling
+def SAVE_CONFIG_ROUTE(): # [NOTE] needs testing, [IMPROVEMENT] add error handling & handle msg in div instead of alert
+    # Get the list of spawned containers
+    machine_info = session.get('machine_info', [])
+    if not machine_info:
+        return jsonify({"message": "No machines spawned. Please spawn machines first."})
+
     config_option = request.form.get('configOption')
     if config_option == 'nginx':
         nginx_port = request.form.get('nginxPort')
@@ -385,11 +390,6 @@ def SAVE_CONFIG_ROUTE(): # [NOTE] needs testing, [IMPROVEMENT] refactor or split
         }
         with open('nginx_config.yml', 'w') as f:
             yaml.dump(config, f)
-
-        # Get the list of spawned containers
-        machine_info = session.get('machine_info', [])
-        if not machine_info:
-            return jsonify({"message": "No machines spawned. Please spawn machines first."})
 
         # Create a temporary inventory file
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as temp_inventory:
@@ -596,4 +596,4 @@ signal.signal(signal.SIGTERM, handle_sigterm) # register SIGTERM custom handler 
 
 ## MAIN ENTRY POINT ##
 if __name__ == '__main__':
-    app.run(debug=True, use_reloader=False) # start the Flask app in debug mode (with auto-reload disabled)
+    app.run(debug=True) # start the Flask app in debug mode, [NOTE] to disable auto-reload, set 'use_reloader=False'
