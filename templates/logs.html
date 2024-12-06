@@ -36,6 +36,12 @@
     <section class="container mx-auto px-6 py-8">
         <h1 class="text-4xl font-bold text-center mb-8 text-white shadow-text">Application Logs</h1>
 
+        <!-- Toggle for System Monitoring / Machine Monitoring -->
+        <div class="flex justify-center items-center space-x-4 mb-6">
+            <button id="systemToggle" class="px-6 py-2 bg-primary text-white font-semibold rounded-md shadow-md hover:bg-blue-600 transition duration-300">System Monitoring</button>
+            <button id="machineToggle" class="px-6 py-2 bg-gray-300 text-gray-700 font-semibold rounded-md shadow-md hover:bg-gray-400 transition duration-300">Machine Monitoring</button>
+        </div>
+
         <div class="bg-white rounded-lg shadow-xl overflow-hidden p-6">
             <div class="log-container">
                 {% if logs %}
@@ -70,6 +76,28 @@
                 }
             }
         }
+
+        // Toggle button functionality
+        const systemToggle = document.getElementById('systemToggle');
+        const machineToggle = document.getElementById('machineToggle');
+
+        systemToggle.addEventListener('click', () => {
+            systemToggle.classList.add('bg-primary', 'text-white');
+            machineToggle.classList.remove('bg-primary', 'text-white');
+            machineToggle.classList.add('bg-gray-300', 'text-gray-700');
+            systemToggle.classList.remove('bg-gray-300', 'text-gray-700');
+            systemToggle.innerText = "System Monitoring";
+            machineToggle.innerText = "Machine Monitoring";
+        });
+
+        machineToggle.addEventListener('click', () => {
+            machineToggle.classList.add('bg-primary', 'text-white');
+            systemToggle.classList.remove('bg-primary', 'text-white');
+            systemToggle.classList.add('bg-gray-300', 'text-gray-700');
+            machineToggle.classList.remove('bg-gray-300', 'text-gray-700');
+            machineToggle.innerText = "Machine Monitoring";
+            systemToggle.innerText = "System Monitoring";
+        });
     </script>
 </body>
 </html>
