@@ -1,0 +1,68 @@
+---
+- name: System Management Playbook
+  hosts: all
+  become: yes
+  vars:
+    security_only: yes
+    upgrade_type: "{{ 'full' if not security_only else 'security' }}"
+    cleanup_cache: true
+
+  tasks:
+    - name: Update package repositories
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install security updates
+      apt:
+        upgrade: dist
+        update_cache: yes
+        only_upgrade: yes
+        dpkg_options: 'force-confold,force-confdef'
+        cache_valid_time: 3600
+        force_apt_get: yes
+      when: upgrade_type == "security"
+
+    - name: Perform a full system upgrade
+      apt:
+        upgrade: dist
+        update_cache: yes
+        dpkg_options: 'force-confold,force-confdef'
+        cache_valid_time: 3600
+        force_apt_get: yes
+      when: upgrade_type == "full"
+
+    - name: Clean up unused packages and cache
+      apt:
+        autoclean: "{{ cleanup_cache }}"
+        autoremove: yes
+
+    - name: Install essential packages
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - curl
+          - wget
+          - vim
+          - git
+          - htop
+          - net-tools
+        state: present
+
+    - name: Check system processes and resources
+      shell: |
+        echo "=== System Information ==="
+        uname -a
+        echo -e "\n=== Memory Usage ==="
+        free -h
+        echo -e "\n=== Disk Usage ==="
+        df -h
+        echo -e "\n=== Process List ==="
+        ps aux | head -n 5
+      register: system_status
+      changed_when: false
+
+    - name: Display system status
+      debug:
+        var: system_status.stdout_lines

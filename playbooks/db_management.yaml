@@ -1,0 +1,128 @@
+---
+- name: Install and configure PostgreSQL
+  hosts: all
+  become: yes
+  vars:
+    postgres_user: "postgres"
+    postgres_password: "postgres_password"
+    postgres_db: "example_db"
+    locale: "en_US.UTF-8"
+    postgres_locale: "en_US.utf8"
+
+  tasks:
+    # Step 1: Install sudo
+    - name: Install sudo
+      apt:
+        name: sudo
+        state: present
+        update_cache: yes
+
+    # Step 2: Install required locales
+    - name: Ensure required locales are present
+      apt:
+        name: 
+          - locales
+          - locales-all
+        state: present
+
+    # Step 3: Generate required locale
+    - name: Generate en_US.UTF-8 locale
+      locale_gen:
+        name: "{{ locale }}"
+        state: present
+
+    # Step 4: Install psycopg2 library for PostgreSQL
+    - name: Install psycopg2 library for PostgreSQL
+      apt:
+        name: python3-psycopg2
+        state: present
+
+    # Step 5: Install PostgreSQL
+    - name: Install PostgreSQL
+      apt:
+        name: postgresql
+        state: present
+
+    # Step 6: Ensure PostgreSQL is running
+    - name: Ensure PostgreSQL is running
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    # Step 7: Wait for PostgreSQL to be ready
+    - name: Wait for PostgreSQL to be ready
+      wait_for:
+        port: 5432
+        timeout: 30
+
+    # Step 8: Set PostgreSQL user password
+    - name: Set PostgreSQL user password
+      become_user: postgres
+      postgresql_user:
+        name: "{{ postgres_user }}"
+        password: "{{ postgres_password }}"
+        role_attr_flags: LOGIN,SUPERUSER
+
+    # Step 9: Create PostgreSQL database with correct locale
+    - name: Create PostgreSQL database
+      become_user: postgres
+      postgresql_db:
+        name: "{{ postgres_db }}"
+        owner: "{{ postgres_user }}"
+        encoding: UTF8
+        lc_collate: "{{ postgres_locale }}"
+        lc_ctype: "{{ postgres_locale }}"
+        template: template0
+        state: present
+
+    # Step 10: Configure PostgreSQL to listen on all interfaces
+    - name: Update postgresql.conf to listen on all interfaces
+      lineinfile:
+        path: /etc/postgresql/13/main/postgresql.conf
+        regexp: '^#?listen_addresses\s*='
+        line: "listen_addresses = '*'"
+      notify: Restart PostgreSQL
+
+    # Step 11: Allow remote connections in pg_hba.conf
+    - name: Update pg_hba.conf to allow remote connections
+      blockinfile:
+        path: /etc/postgresql/13/main/pg_hba.conf
+        block: |
+          # Allow remote connections
+          host    all             all             0.0.0.0/0               md5
+          host    all             all             ::/0                    md5
+      notify: Restart PostgreSQL
+
+    # Step 12: Install UFW (optional)
+    - name: Check if UFW is installed
+      command: which ufw
+      register: ufw_check
+      ignore_errors: yes
+      changed_when: false
+
+    # Step 13: Configure firewall if UFW is present
+    - name: Configure UFW for PostgreSQL
+      block:
+        - name: Install UFW
+          apt:
+            name: ufw
+            state: present
+          when: ufw_check.rc != 0
+
+        - name: Allow PostgreSQL through UFW
+          community.general.ufw:
+            rule: allow
+            port: 5432
+            proto: tcp
+      when: not ansible_virtualization_type in ['docker', 'container']
+      ignore_errors: yes
+
+  handlers:
+    - name: Restart PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
+
+    - name: Reload locale
+      command: update-locale LANG={{ locale }}
