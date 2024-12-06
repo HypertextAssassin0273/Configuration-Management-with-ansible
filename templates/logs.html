@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Logs</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-image: url('https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+    </style>
+</head>
+
+<body class="bg-background min-h-screen font-sans text-gray-900">
+    <header>
+        <nav class="bg-white shadow-md">
+            <div class="container mx-auto px-6 py-3">
+                <div class="flex justify-between items-center">
+                    <a href="/" class="text-2xl font-bold text-primary">CONFIGURATION MANAGEMENT</a>
+                    <div class="space-x-4">
+                        <a href="/" class="text-gray-700 hover:text-primary transition duration-300">HOME</a>
+                        <a href="/configure" class="text-gray-700 hover:text-primary transition duration-300">CONFIGURE</a>
+                        <a href="/logs" class="text-gray-700 hover:text-primary transition duration-300">LOGGING</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <section class="container mx-auto px-6 py-8">
+        <h1 class="text-4xl font-bold text-center mb-8 text-white shadow-text">Application Logs</h1>
+
+        <div class="bg-white rounded-lg shadow-xl overflow-hidden p-6">
+            <div class="log-container">
+                {% if logs %}
+                    {% for log in logs %}
+                        <div class="log-entry 
+                            {% if 'INFO' in log %}log-info{% elif 'DEBUG' in log %}log-debug{% 
+                            elif 'WARNING' in log %}log-warning{% elif 'ERROR' in log %}log-error{% endif %} 
+                            bg-gray-100 p-4 rounded-lg mb-4 shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                            {{ log }}
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-center text-xl font-semibold text-gray-600">No logs available.</p>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        danger: '#EF4444',
+                        background: '#F3F4F6',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
