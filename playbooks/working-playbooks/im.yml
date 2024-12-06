@@ -1,0 +1,156 @@
+---
+- name: Infrastructure Monitoring Setup
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Ensure required packages are installed
+      package:
+        name: 
+          - sysstat
+          - cron
+        state: present
+      become: yes
+
+    - name: Create monitoring script directory
+      file:
+        path: /opt/monitoring
+        state: directory
+        mode: '0755'
+      become: yes
+
+    - name: Create monitoring script
+      copy:
+        dest: /opt/monitoring/monitor.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          
+          # Create monitoring logs directory
+          MON_LOGS_DIR="/var/log/infrastructure_monitoring"
+          mkdir -p "$MON_LOGS_DIR"
+          chmod 755 "$MON_LOGS_DIR"
+          
+          # Function to log monitoring data
+          log_data() {
+              local file="$1"
+              local content="$2"
+              echo -e "$(date '+%Y-%m-%d %H:%M:%S') - $content" >> "$MON_LOGS_DIR/$file"
+          }
+          
+          # CPU Usage Monitoring
+          cpu_usage=$(top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}')
+          log_data "cpu_usage.log" "CPU Usage: ${cpu_usage}%"
+          
+          # Memory Usage Monitoring
+          memory_usage=$(free -m | awk 'NR==2{printf "%.2f", $3*100/$2}')
+          log_data "memory_usage.log" "Memory Usage: ${memory_usage}%"
+          
+          # Disk Usage Monitoring
+          disk_usage=$(df -h --output=pcent / | tail -1 | tr -d '%')
+          log_data "disk_usage.log" "Disk Usage: ${disk_usage}%"
+          
+          # Disk I/O Monitoring
+          disk_io=$(iostat -d | awk '/^[^Device]/ {if(NR>6) print}')
+          log_data "disk_io.log" "Disk I/O Stats:\n${disk_io}"
+          
+          # Network Bandwidth Monitoring
+          network_bandwidth=$(sar -n DEV 1 1 | grep 'Average:' | awk '{print $2, $3, $5}')
+          log_data "network_bandwidth.log" "Network Bandwidth Usage:\n${network_bandwidth}"
+          
+          # Network Latency Monitoring
+          network_latency=$(ping -c 1 8.8.8.8 | awk -F'/' 'END{ print (/^rtt/? $5:"1000")}')
+          log_data "network_latency.log" "Network Latency: ${network_latency} ms"
+          
+          # System Uptime Monitoring
+          system_uptime=$(uptime -p)
+          log_data "system_uptime.log" "System Uptime: ${system_uptime}"
+          
+          # Rotate logs (keep last 7 days)
+          find "$MON_LOGS_DIR" -type f -name "*.log" -mtime +7 -delete
+      become: yes
+
+    - name: Create log directory
+      file:
+        path: /var/log/infrastructure_monitoring
+        state: directory
+        mode: '0755'
+      become: yes
+
+    - name: Set up monitoring cron jobs
+      cron:
+        name: "{{ item.name }}"
+        minute: "{{ item.minute }}"
+        job: "{{ item.job }}"
+        state: present
+      become: yes
+      with_items:
+        - name: "CPU Monitoring"
+          minute: "*/2"
+          job: "/opt/monitoring/monitor.sh"
+        - name: "Log Rotation"
+          minute: "0"
+          hour: "0"
+          job: "find /var/log/infrastructure_monitoring -type f -name '*.log' -mtime +7 -delete"
+
+    - name: Create log aggregation script
+      copy:
+        dest: /opt/monitoring/aggregate_logs.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          LOG_DIR="/var/log/infrastructure_monitoring"
+          REPORT_FILE="$LOG_DIR/daily_report.txt"
+          
+          echo "Infrastructure Monitoring Daily Report - $(date '+%Y-%m-%d')" > $REPORT_FILE
+          echo "=================================================" >> $REPORT_FILE
+          
+          # CPU Usage Summary
+          echo "CPU Usage Summary:" >> $REPORT_FILE
+          tail -n 720 $LOG_DIR/cpu_usage.log | awk '{sum += $NF; count++} END {print "Average: " sum/count "%"}' >> $REPORT_FILE
+          
+          # Memory Usage Summary
+          echo -e "\nMemory Usage Summary:" >> $REPORT_FILE
+          tail -n 720 $LOG_DIR/memory_usage.log | awk '{sum += $NF; count++} END {print "Average: " sum/count "%"}' >> $REPORT_FILE
+          
+          # Disk Usage Summary
+          echo -e "\nDisk Usage Summary:" >> $REPORT_FILE
+          tail -n 1 $LOG_DIR/disk_usage.log >> $REPORT_FILE
+          
+          # Network Latency Summary
+          echo -e "\nNetwork Latency Summary:" >> $REPORT_FILE
+          tail -n 720 $LOG_DIR/network_latency.log | awk '{sum += $NF; count++} END {print "Average: " sum/count " ms"}' >> $REPORT_FILE
+      become: yes
+
+    - name: Set up daily report cron job
+      cron:
+        name: "Daily Monitoring Report"
+        minute: "0"
+        hour: "23"
+        job: "/opt/monitoring/aggregate_logs.sh"
+        state: present
+      become: yes
+
+    - name: Setup logrotate configuration
+      copy:
+        dest: /etc/logrotate.d/infrastructure_monitoring
+        content: |
+          /var/log/infrastructure_monitoring/*.log {
+              daily
+              rotate 7
+              compress
+              missingok
+              notifempty
+              create 0644 root root
+          }
+      become: yes
+
+    - name: Ensure cron service is running
+      service:
+        name: cron
+        state: started
+        enabled: yes
+      become: yes
+
+    - name: Initial run of monitoring script
+      command: /opt/monitoring/monitor.sh
+      become: yes

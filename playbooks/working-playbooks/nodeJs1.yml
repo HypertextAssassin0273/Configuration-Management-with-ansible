@@ -1,0 +1,72 @@
+---
+- name: Deploy Node.js Application
+  hosts: all
+  become: yes
+  vars:
+    git_repo_url: "https://github.com/Zarah25/nodejs.git"
+    project_dir: "/opt/simple-nodejs-app"
+    nodejs_port: 3000
+
+  tasks:
+    - name: Install Node.js
+      apt:
+        name: nodejs
+        state: present
+      tags: node_install
+
+    - name: Install npm and ufw
+      apt:
+        name: 
+          - npm
+          - ufw
+        state: present
+        update_cache: yes
+      tags: npm_install
+
+    - name: Install Git
+      apt:
+        name: git
+        state: present
+
+    - name: Clone the Node.js project from Git repo
+      git:
+        repo: "{{ git_repo_url }}"
+        dest: "{{ project_dir }}"
+        clone: yes
+        update: yes
+        version: main
+
+    - name: Install project dependencies using npm
+      npm:
+        path: "{{ project_dir }}"
+        state: present
+
+    - name: Install PM2 globally
+      npm:
+        name: pm2
+        global: yes
+        state: present
+
+    - name: Start the Node.js application using PM2
+      command: pm2 start hello.js --force
+      args:
+        chdir: "{{ project_dir }}"
+
+    - name: Configure UFW rules
+      block:
+        - name: Allow SSH
+          command: "ufw allow 22/tcp"
+          
+        - name: Allow Node.js application port
+          command: "ufw allow {{ nodejs_port }}/tcp"
+          
+        - name: Enable UFW
+          command: "ufw --force enable"
+      ignore_errors: yes
+
+  handlers:
+    - name: Reload firewall
+      service:
+        name: ufw
+        state: reloaded
+      become: yes
