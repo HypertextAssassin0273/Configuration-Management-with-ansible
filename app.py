@@ -126,7 +126,7 @@ def cleanup_files(file_paths):
             os.unlink(file_path) # removes the file
 
 
-def run_ansible(hosts, command): # [NOTE] shell command execution will not work with other shells like zsh, fish, etc.
+def run_ansible(hosts, command, type): # [NOTE] shell command execution will not work with other shells like zsh, fish, etc.
     """
     Runs an Ansible playbook on specified hosts with a given command.
     """
@@ -146,8 +146,8 @@ def run_ansible(hosts, command): # [NOTE] shell command execution will not work 
         - name: Run custom command on all hosts
           hosts: all
           tasks:
-            - name: Execute custom command (in interactive bash shell)
-              shell: bash -i -c "{command}"
+            - name: Execute custom command (interactive/non-interactive)
+              shell: {f'bash -i -c "{command}"' if type == 'interactive' else command}
               register: command_output
             - debug:
                 var: command_output.stdout
@@ -257,7 +257,7 @@ def SPAWN_MACHINES_ROUTE():
 @app.route('/run_command', methods=['POST'])
 def RUN_COMMAND_ROUTE():
     try:
-        command = request.form['command']
+        command = request.form.get('command')
         if not command:
             return jsonify({"error": "Invalid command."}), 400
 
@@ -280,7 +280,7 @@ def RUN_COMMAND_ROUTE():
         #     return jsonify({"error": "No ready containers available for command execution."}), 400
 
         app.logger.info("Running Ansible command on hosts.")
-        command_results = run_ansible(ansible_hosts, command)
+        command_results = run_ansible(ansible_hosts, command, request.form.get('type'))
 
         for machine in machine_info:
             container_id = f"container_{machine['container_id']}"
@@ -372,7 +372,7 @@ def FETCH_STOPPED_CONTAINERS_ROUTE():
 
 
 @app.route('/save_config', methods=['POST'])
-def SAVE_CONFIG_ROUTE(): # [NOTE] needs testing, [IMPROVEMENT] add error handling & handle msg in div instead of alert
+def SAVE_CONFIG_ROUTE(): # [NOTE] needs more testing, [IMPROVEMENT] add error handling & handle msg in div instead of alert
     # Get the list of spawned containers
     machine_info = session.get('machine_info', [])
     if not machine_info:
@@ -388,8 +388,8 @@ def SAVE_CONFIG_ROUTE(): # [NOTE] needs testing, [IMPROVEMENT] add error handlin
             'nginx_port': nginx_port,
             'server_name': nginx_server_name
         }
-        with open('nginx_config.yml', 'w') as f:
-            yaml.dump(config, f)
+        with open('nginx_config.yml', 'w') as file:
+            yaml.dump(config, file)
 
         # Create a temporary inventory file
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as temp_inventory:
@@ -439,58 +439,53 @@ def SAVE_CONFIG_ROUTE(): # [NOTE] needs testing, [IMPROVEMENT] add error handlin
                 'ftp_username': ftp_username,
                 'ftp_password': ftp_password
             }
-            
-            # Get the list of spawned containers
-            machine_info = session.get('machine_info', [])
-            if not machine_info:
-                return jsonify({"message": "No machines spawned. Please spawn machines first."}), 400
 
             # Create temporary inventory file
             inventory_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml')
-            try:
-                inventory = {
-                    'all': {
-                        'hosts': {}
-                    }
+
+            inventory = {
+                'all': {
+                    'hosts': {}
                 }
-                for machine in machine_info:
-                    inventory['all']['hosts'][f"container_{machine['container_id']}"] = {
-                        'ansible_host': 'localhost',
-                        'ansible_port': machine['host_port'],
-                        'ansible_user': 'root',
-                        'ansible_ssh_private_key_file': ssh_key_path,
-                        'ansible_ssh_extra_args': '-o StrictHostKeyChecking=no'
-                    }
-                yaml.dump(inventory, inventory_file)
-                inventory_file.close()
+            }
+            for machine in machine_info:
+                inventory['all']['hosts'][f"container_{machine['container_id']}"] = {
+                    'ansible_host': 'localhost',
+                    'ansible_port': machine['host_port'],
+                    'ansible_user': 'root',
+                    'ansible_ssh_private_key_file': ssh_key_path,
+                    'ansible_ssh_extra_args': '-o StrictHostKeyChecking=no'
+                }
+            yaml.dump(inventory, inventory_file)
+            inventory_file.close()
 
-                # Run Ansible playbook
-                playbook_path = os.path.join(os.path.dirname(__file__), 'playbooks', 'install_ftp.yml')
-                result = ansible_runner.run(
-                    playbook=playbook_path,
-                    inventory=inventory_file.name,
-                    extravars=config,
-                    private_data_dir=os.path.dirname(playbook_path)  # set private_data_dir to playbooks directory
-                )
-                
-                if result.rc == 0:
-                    return jsonify({
-                        "message": "FTP configuration saved and applied successfully.",
-                        "details": f"You can now connect to FTP using the configured username ({ftp_username}) and password on port {ftp_port}."
-                    })
-                else:
-                    return jsonify({
-                        "message": f"Error applying FTP configuration. Return code: {result.rc}. Check Ansible logs for details."
-                    }), 500
+            # Run Ansible playbook
+            playbook_path = os.path.join(os.path.dirname(__file__), 'playbooks', 'install_ftp.yml')
+            result = ansible_runner.run(
+                playbook=playbook_path,
+                inventory=inventory_file.name,
+                extravars=config,
+                private_data_dir=os.path.dirname(playbook_path)  # set private_data_dir to playbooks directory
+            )
 
-            finally:
-                # Clean up temporary inventory file
-                if os.path.exists(inventory_file.name):
-                    os.unlink(inventory_file.name)
+            if result.rc == 0:
+                return jsonify({
+                    "message": "FTP configuration saved and applied successfully.",
+                    "details": f"You can now connect to FTP using the configured username ({ftp_username}) and password on port {ftp_port}."
+                })
+            else:
+                return jsonify({
+                    "message": f"Error applying FTP configuration. Return code: {result.rc}. Check Ansible logs for details."
+                }), 500
 
         except Exception as e:
             app.logger.error(f"Error configuring FTP: {str(e)}")
             return jsonify({"message": f"Error configuring FTP: {str(e)}"}), 500
+        
+        finally:
+            # Clean up temporary inventory file
+            if os.path.exists(inventory_file.name):
+                os.unlink(inventory_file.name)
 
     elif config_option == 'custom':
         if 'customPlaybook' not in request.files:
@@ -507,12 +502,6 @@ def SAVE_CONFIG_ROUTE(): # [NOTE] needs testing, [IMPROVEMENT] add error handlin
                 # Save the custom playbook to a temporary file
                 with tempfile.NamedTemporaryFile(mode='w+', suffix='.yml', delete=False) as temp_playbook:
                     custom_playbook.save(temp_playbook.name)
-
-                # Get the list of spawned containers
-                machine_info = session.get('machine_info', [])
-                if not machine_info:
-                    app.logger.error("No machines spawned")
-                    return jsonify({"message": "No machines spawned. Please spawn machines first."}), 400
 
                 # Create a temporary inventory file
                 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as temp_inventory:
