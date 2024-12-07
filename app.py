@@ -2,9 +2,7 @@
 from flask import Flask, render_template, request, jsonify, session # external
 from werkzeug.security import generate_password_hash # built-in
 from flask_session import Session # external
-import logging
 from logging.handlers import RotatingFileHandler
-
 
 import os, shutil, signal, atexit, json, yaml, logging, tempfile # built-in
 import docker, ansible_runner # external
@@ -31,6 +29,31 @@ ssh_key_path = os.path.join(ssh_key_dir, "docker_container_key")
 public_key_path = ssh_key_path + ".pub"
 
 MAX_CONTAINER_LIMIT = 100 # maximum number of containers that can be spawned
+
+
+## LOGGING SETUP ##
+
+# Set up logging
+log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# Create a file handler for logging to a file (overwrite the file each time)
+log_file = "app.log"  # The log file name
+file_handler = logging.FileHandler(log_file, mode='w')  # 'w' mode will overwrite the file each time
+file_handler.setFormatter(log_formatter)
+file_handler.setLevel(logging.DEBUG)  # Adjust the level as needed (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+
+# Create a console handler for logging to the terminal
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(log_formatter)
+console_handler.setLevel(logging.DEBUG)  # Adjust the level as needed
+
+# Get the app logger and set the log level
+app.logger.setLevel(logging.DEBUG)
+app.logger.addHandler(file_handler)
+app.logger.addHandler(console_handler)
+
+# Log a message to verify setup
+app.logger.info("Logging setup complete. Logs will be saved to 'app.log' and displayed on the console.")
 
 
 ## HELPER FUNCTIONS ##
@@ -209,30 +232,6 @@ def cleanup(action='stop'):
 
     app.logger.info("Cleanup complete.")
 
-import logging
-from logging.handlers import RotatingFileHandler
-
-# Set up logging
-log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-
-# Create a file handler for logging to a file (overwrite the file each time)
-log_file = "app.log"  # The log file name
-file_handler = logging.FileHandler(log_file, mode='w')  # 'w' mode will overwrite the file each time
-file_handler.setFormatter(log_formatter)
-file_handler.setLevel(logging.DEBUG)  # Adjust the level as needed (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-
-# Create a console handler for logging to the terminal
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(log_formatter)
-console_handler.setLevel(logging.DEBUG)  # Adjust the level as needed
-
-# Get the app logger and set the log level
-app.logger.setLevel(logging.DEBUG)
-app.logger.addHandler(file_handler)
-app.logger.addHandler(console_handler)
-
-# Log a message to verify setup
-app.logger.info("Logging setup complete. Logs will be saved to 'app.log' and displayed on the console.")
 
 ## ROUTES (FOR RENDERING HTML PAGES) ##
 @app.route('/')
@@ -281,10 +280,8 @@ def SPAWN_MACHINES_ROUTE():
         return jsonify({"error": str(e)}), 500
 
 
-
-
 @app.route('/logs')
-def display_logs():
+def DISPLAY_LOGS_ROUTE():
     """
     Display system and machine monitoring logs.
     Handles both single container and all container views.
@@ -436,6 +433,7 @@ def display_logs():
             selected_container=selected_container,
             selected_tab=selected_tab
         )
+
 
 @app.route('/run_command', methods=['POST'])
 def RUN_COMMAND_ROUTE():
