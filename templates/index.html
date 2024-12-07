@@ -53,16 +53,34 @@
 
     <body class="bg-background min-h-screen font-sans text-gray-900">
         <section class="container mx-auto px-6 py-8">
-            <h1 class="text-4xl font-bold text-center mb-8 text-white shadow-text">Docker Manager</h1>
+            <h1 class="text-4xl font-bold text-center mb-8 text-white shadow-text">Manage Machines</h1>
 
             <div class="bg-white rounded-lg shadow-xl overflow-hidden">
                 <div class="flex border-b">
+                    <button id="externalTab" class="flex-1 py-4 px-6 text-lg font-semibold focus:outline-none transition duration-300" aria-selected="false" role="tab" aria-controls="externalPanel">
+                        External Machines
+                    </button>
                     <button id="spawnTab" class="flex-1 py-4 px-6 text-lg font-semibold focus:outline-none transition duration-300" aria-selected="true" role="tab" aria-controls="spawnPanel">
-                        Spawn
+                        Docker Containers
                     </button>
                     <button id="commandTab" class="flex-1 py-4 px-6 text-lg font-semibold focus:outline-none transition duration-300" aria-selected="false" role="tab" aria-controls="commandPanel">
                         Run Commands
                     </button>
+                </div>
+
+                <div id="externalPanel" role="tabpanel" aria-labelledby="externalTab" class="p-6 hidden">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-800">External Machines</h2>
+                    <div class="flex items center justify-center space-x-4 mb-6">
+                        <label for="externalMachineUser" class="text-lg font-medium text-gray-700">Username:</label>
+                        <input type="text" id="externalMachineUser" placeholder="Enter Username" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+                        <label for="externalMachineIP" class="text-lg font-medium text-gray-700">Machine IP:</label>
+                        <input type="text" id="externalMachineIP" placeholder="Enter IP Address" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+                        <button onclick="addExternalMachine()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Add Machine
+                        </button>
+                    </div>
+
+                    <div id="externalMachineInfo" class="space-y-4"></div>
                 </div>
 
                 <div id="spawnPanel" role="tabpanel" aria-labelledby="spawnTab" class="p-6">
@@ -74,19 +92,15 @@
                         <button onclick="spawnMachines()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
                             Spawn New
                         </button>
-
                         <button onclick="fetchStoppedMachines()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
                             Fetch Old
                         </button>
-
                         <button onclick="forAllMachines()" class="bg-danger text-white font-semibold px-6 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
                             Stop All
                         </button>
-
                         <button onclick="forAllMachines('remove')" class="bg-danger text-white font-semibold px-6 py-2 rounded-md hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
                             Remove All
                         </button>
-
                         <!-- bg (color) options: bg-secondary, bg-danger, bg-green-600 ?? -->
                     </div>
 
@@ -94,13 +108,16 @@
                 </div>
             
                 <div id="commandPanel" role="tabpanel" aria-labelledby="commandTab" class="p-6 hidden">
-                    <h2 class="text-2xl font-semibold mb-4 text-gray-800">Run Commands</h2>
+                    <h2 id="commandHeader" class="text-2xl font-semibold mb-4 text-gray-800 flex items-center">
+                        Non-Interactive Shell
+                    </h2>
                     <div class="flex items-center justify-center space-x-4 mb-6">
-                        <label for="command" class="text-lg font-medium text-gray-700">Command to run:</label>
                         <textarea id="command" placeholder="Enter command" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary flex-grow"></textarea>
-
                         <button onclick="runCommand()" class="bg-secondary text-white font-semibold px-6 py-2 rounded-md hover:bg-green-600 transition duration-300 ease-in-out transform hover:scale-105">
                             Run Command
+                        </button>
+                        <button onclick="changeCommandType()" class="bg-primary text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105">
+                            Switch Type
                         </button>
                     </div>
 
@@ -112,9 +129,11 @@
         <script>
             let machineInfoData = [];
 
-            /* Fetch Machine Info on Page Load */
+            /* Operations on Page Load */
             window.onload = function() {
-                axios.get('/get_machine_info')
+                switchTab(spawnTab, spawnPanel); // ensure spawnPanel is shown by default
+
+                axios.get('/get_machine_info') // fetch all machines info
                 .then(function (response) {
                     machineInfoData = response.data;
                     displayMachineInfo(machineInfoData);
@@ -128,23 +147,27 @@
 
 
             /* Handling Tab Switching */
+            const externalTab = document.getElementById('externalTab');
             const spawnTab = document.getElementById('spawnTab');
             const commandTab = document.getElementById('commandTab');
+
+            const externalPanel = document.getElementById('externalPanel');
             const spawnPanel = document.getElementById('spawnPanel');
             const commandPanel = document.getElementById('commandPanel');
 
             function switchTab(tab, panel) {
-                [spawnTab, commandTab].forEach(t => {
+                [externalTab, spawnTab, commandTab].forEach(t => {
                     t.classList.remove('text-primary', 'border-b-2', 'border-primary');
                     t.setAttribute('aria-selected', 'false');
                 });
-                [spawnPanel, commandPanel].forEach(p => p.classList.add('hidden'));
+                [externalPanel, spawnPanel, commandPanel].forEach(p => p.classList.add('hidden'));
 
                 tab.classList.add('text-primary', 'border-b-2', 'border-primary');
                 tab.setAttribute('aria-selected', 'true');
                 panel.classList.remove('hidden');
             }
 
+            externalTab.addEventListener('click', () => switchTab(externalTab, externalPanel));
             spawnTab.addEventListener('click', () => switchTab(spawnTab, spawnPanel));
             commandTab.addEventListener('click', () => switchTab(commandTab, commandPanel));
 
@@ -267,12 +290,24 @@
 
 
             /* Handling Command Execution */
+            let commandType = 'non-interactive'; // default shell type
+
+            function changeCommandType() {
+                const commandHeader = document.getElementById('commandHeader');
+                commandHeader.innerHTML = commandType === 'interactive' ? 'Non-Interactive Shell' : 'Interactive Shell';
+                commandType = commandType === 'interactive' ? 'non-interactive' : 'interactive';
+            }
+
             function runCommand() {
                 const command = document.getElementById('command').value;
                 const commandResults = document.getElementById('commandResults');
                 commandResults.innerHTML = '<div class="text-center text-xl font-semibold text-gray-600">Running command...</div>';
 
-                axios.post('/run_command', `command=${encodeURIComponent(command)}`, {
+                const params = new URLSearchParams();
+                params.append('command', command);
+                params.append('type', commandType);
+
+                axios.post('/run_command', params, {
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded'
                     }

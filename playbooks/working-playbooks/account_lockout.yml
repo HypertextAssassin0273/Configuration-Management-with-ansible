@@ -1,0 +1,69 @@
+---
+- name: Configure account lockout policy 
+  hosts: all
+  become: yes
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Update apt sources
+      raw: |
+        echo "deb http://deb.debian.org/debian bullseye main" > /etc/apt/sources.list
+        echo "deb http://security.debian.org/debian-security bullseye-security main" >> /etc/apt/sources.list
+        echo "deb http://deb.debian.org/debian bullseye-updates main" >> /etc/apt/sources.list
+      args:
+        executable: /bin/bash
+
+    - name: Update package cache
+      raw: apt-get clean && apt-get update
+      args:
+        executable: /bin/bash
+
+    - name: Install required packages
+      raw: apt-get install -y openssh-server libpam-modules
+      args:
+        executable: /bin/bash
+
+    - name: Create faillock directory
+      raw: mkdir -p /var/run/faillock && chmod 755 /var/run/faillock
+      args:
+        executable: /bin/bash
+
+    - name: Create faillock configuration file
+      raw: touch /etc/security/faillock.conf && chmod 644 /etc/security/faillock.conf
+      args:
+        executable: /bin/bash
+        
+    - name: Configure faillock authentication module
+      raw: |
+        grep -q "^auth.*required.*pam_faillock.so.*preauth.*silent.*deny=5.*unlock_time=900" /etc/security/faillock.conf || \
+        echo "auth        required      pam_faillock.so preauth silent deny=5 unlock_time=900" >> /etc/security/faillock.conf
+      args:
+        executable: /bin/bash
+
+    - name: Create and configure common-auth file
+      raw: |
+        touch /etc/pam.d/common-auth && chmod 644 /etc/pam.d/common-auth
+        grep -q "^auth.*required.*pam_faillock.so.*preauth.*silent.*deny=5.*unlock_time=900" /etc/pam.d/common-auth || \
+        echo "auth required pam_faillock.so preauth silent deny=5 unlock_time=900" >> /etc/pam.d/common-auth
+      args:
+        executable: /bin/bash
+
+    - name: Configure PAM account module
+      raw: |
+        touch /etc/pam.d/common-account
+        grep -q "^account.*required.*pam_faillock.so" /etc/pam.d/common-account || \
+        echo "account required pam_faillock.so" >> /etc/pam.d/common-account
+      args:
+        executable: /bin/bash
+
+    - name: Configure and restart SSH
+      raw: |
+        mkdir -p /run/sshd
+        if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then
+          ssh-keygen -A
+        fi
+        sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+        service ssh restart
+      args:
+        executable: /bin/bash

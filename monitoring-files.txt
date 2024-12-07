@@ -1,0 +1,14 @@
+Individual metric logs:
+
+/var/log/infrastructure_monitoring/cpu_usage.log
+/var/log/infrastructure_monitoring/memory_usage.log
+/var/log/infrastructure_monitoring/disk_usage.log
+/var/log/infrastructure_monitoring/disk_io.log
+/var/log/infrastructure_monitoring/network_bandwidth.log
+/var/log/infrastructure_monitoring/network_latency.log
+/var/log/infrastructure_monitoring/system_uptime.log
+
+
+Daily summary report:
+
+/var/log/infrastructure_monitoring/daily_report.txt
